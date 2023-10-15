@@ -21,6 +21,9 @@
     <ClCompile Include="Direct3D_12_collection.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="MeshShaderTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\basic.frag.hlsl">
@@ -29,5 +32,21 @@
     <FxCompile Include="shaders\basic.vert.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
+    <FxCompile Include="shaders\ms.amplification.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\ms.mesh.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="common.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\compile-shaders.bat">
+      <Filter>资源文件\shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>

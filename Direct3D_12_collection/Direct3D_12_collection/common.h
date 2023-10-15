@@ -1,0 +1,116 @@
+// Direct3D_12_collection.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
+//
+
+#include <cstdio>
+#include <cstdint>
+#include <cstdlib>
+#include <cstdarg>
+#include <cerrno>
+
+#define _USE_MATH_DEFINES
+#include <math.h>
+#include <cmath>
+#include <limits>
+#include <algorithm>
+#include <utility>
+
+#include <Windows.h>
+#include <d3d12.h>
+#include <dxgi1_4.h>
+#include <d3dcompiler.h>
+
+struct alignas(sizeof(void*)) RootSignatureSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE rootSignatureSubType;
+    ID3D12RootSignature* rootSignature;
+};
+
+struct alignas(sizeof(void*)) ShaderByteCodeSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE shaderObjSubType;
+    D3D12_SHADER_BYTECODE shaderByteCode;
+};
+
+struct alignas(sizeof(void*)) BlendStateSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE blendSubType;
+    D3D12_BLEND_DESC blendDesc;
+};
+
+struct alignas(sizeof(void*)) SampleMaskSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE sampleMaskSubType;
+    UINT sampleMask;
+};
+
+struct alignas(sizeof(void*)) RasterizerStateSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE rasterizerSubType;
+    D3D12_RASTERIZER_DESC rasterizerState;
+};
+
+struct alignas(sizeof(void*)) DepthStencilSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE depthStencilSubType;
+    D3D12_DEPTH_STENCIL_DESC depthStencilState;
+};
+
+struct alignas(sizeof(void*)) IBStripCutValueSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE ibStripCutValueSubType;
+    D3D12_INDEX_BUFFER_STRIP_CUT_VALUE ibStripCutValue;
+};
+
+struct alignas(sizeof(void*)) PrimitiveTopologyTypeSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE primitiveSubType;
+    D3D12_PRIMITIVE_TOPOLOGY_TYPE primitiveTopologyType;
+};
+
+struct alignas(sizeof(void*)) RenderTargetFormatsSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE renderTargetFormatSubType;
+    D3D12_RT_FORMAT_ARRAY renderTargetFormats;
+};
+
+struct alignas(sizeof(void*)) DepthStencilViewFormat
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE depthStencilSubType;
+    DXGI_FORMAT depthStencilViewFormat;
+};
+
+struct alignas(sizeof(void*)) SampleDescSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE sampleSubType;
+    DXGI_SAMPLE_DESC sampleDesc;
+};
+
+struct alignas(sizeof(void*)) NodeMaskSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE nodeMaskSubType;
+    UINT nodeMask;
+};
+
+struct alignas(sizeof(void*)) CachedPSOSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE cachedPSOSubType;
+    D3D12_CACHED_PIPELINE_STATE cachedPSO;
+};
+
+struct alignas(sizeof(void*)) FlagsSubobject
+{
+    D3D12_PIPELINE_STATE_SUBOBJECT_TYPE flagsSubType;
+    D3D12_PIPELINE_STATE_FLAGS flags;
+};
+
+extern auto CreateCompiledShaderObjectFromPath(const char csoPath[]) -> D3D12_SHADER_BYTECODE;
+
+extern auto WriteToDeviceResourceAndSync(
+    _In_ ID3D12GraphicsCommandList* pCmdList,
+    size_t dataSize,
+    _In_ ID3D12Resource* pDestinationResource,
+    _In_ ID3D12Resource* pIntermediate) -> void;
+
+extern auto CreateMeshShaderTestAssets(ID3D12Device* d3d_device, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*>;
+

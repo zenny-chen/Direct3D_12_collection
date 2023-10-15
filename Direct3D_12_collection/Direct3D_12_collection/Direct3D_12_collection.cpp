@@ -1,23 +1,7 @@
 // Direct3D_12_collection.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
 //
 
-#include <cstdio>
-#include <cstdint>
-#include <cstdlib>
-#include <cstdarg>
-#include <cerrno>
-
-#define _USE_MATH_DEFINES
-#include <math.h>
-#include <cmath>
-#include <limits>
-#include <algorithm>
-#include <utility>
-
-#include <Windows.h>
-#include <d3d12.h>
-#include <dxgi1_4.h>
-#include <d3dcompiler.h>
+#include "common.h"
 
 static constexpr UINT MAX_HARDWARE_ADAPTER_COUNT = 16;
 static constexpr UINT TOTAL_FRAME_COUNT = 5;
@@ -35,9 +19,9 @@ static ID3D12DescriptorHeap* s_rtvDescriptorHeap = nullptr;
 static UINT s_rtvDescriptorSize = 0;
 static ID3D12DescriptorHeap* s_cbvDescriptorHeap = nullptr;
 static ID3D12RootSignature* s_rootSignature = nullptr;
-static ID3D12PipelineState* s_basicPipelineState = nullptr;
-static ID3D12GraphicsCommandList* s_basicCommandList = nullptr;
-static ID3D12GraphicsCommandList* s_basicCommandBundle = nullptr;
+static ID3D12PipelineState* s_pipelineState = nullptr;
+static ID3D12GraphicsCommandList* s_commandList = nullptr;
+static ID3D12GraphicsCommandList* s_commandBundle = nullptr;
 static ID3D12Resource* s_renderTargets[TOTAL_FRAME_COUNT]{ };
 // Host visible device buffer as an intermediate upload buffer
 static ID3D12Resource* s_devHostBuffer = nullptr;
@@ -60,11 +44,11 @@ static POINT s_wndMinsize{ };       // minimum window size
 static const char s_appName[] = "Direct3D 12 Collections";
 static float s_rotateAngle = 0.0f;
 
-static void WriteToDeviceResourceAndSync(
+auto WriteToDeviceResourceAndSync(
     _In_ ID3D12GraphicsCommandList* pCmdList,
     size_t dataSize,
     _In_ ID3D12Resource* pDestinationResource,
-    _In_ ID3D12Resource* pIntermediate)
+    _In_ ID3D12Resource* pIntermediate) -> void
 {
     const D3D12_RESOURCE_BARRIER beginCopyBarrier = {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -110,7 +94,7 @@ static auto TransWStrToString(char dstBuf[], const WCHAR srcBuf[]) -> void
     dstBuf[len] = '\0';
 }
 
-static auto CreateCompiledShaderObjectFromPath(const char csoPath[]) -> D3D12_SHADER_BYTECODE
+auto CreateCompiledShaderObjectFromPath(const char csoPath[]) -> D3D12_SHADER_BYTECODE
 {
     D3D12_SHADER_BYTECODE result{ };
     FILE* fp = nullptr;
@@ -604,47 +588,6 @@ static auto CreateRenderTargetViews() -> bool
     return true;
 }
 
-static auto CreateRootSignature() -> bool
-{
-    const D3D12_ROOT_PARAMETER rootParameter{
-        // Use constants directly in the root signature
-        .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
-        .Descriptor {
-            .ShaderRegister = 0,
-            .RegisterSpace = 0
-        },
-        // This constant buffer will just be accessed in a vertex shader
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX
-    };
-
-    // Create an empty root signature.
-    const D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
-        .NumParameters = 1,
-        .pParameters = &rootParameter,
-        .NumStaticSamplers = 0,
-        .pStaticSamplers = nullptr,
-        .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
-    };
-
-    ID3DBlob* signature = nullptr;
-    ID3DBlob* error = nullptr;
-    HRESULT hRes = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
-    if (FAILED(hRes))
-    {
-        fprintf(stderr, "D3D12SerializeRootSignature failed: %ld\n", hRes);
-        return false;
-    }
-
-    hRes = s_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&s_rootSignature));
-    if (FAILED(hRes))
-    {
-        fprintf(stderr, "CreateRootSignature failed: %ld\n", hRes);
-        return false;
-    }
-
-    return true;
-}
-
 static auto CreateFenceAndEvent() -> bool
 {
     HRESULT hRes = s_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&s_fence));
@@ -692,6 +635,51 @@ static auto WaitForPreviousFrame(void) -> bool
     return true;
 }
 
+static auto CreateBasicRootSignature() -> bool
+{
+    const D3D12_ROOT_PARAMETER rootParameter{
+        // Use constants directly in the root signature
+        .ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+        .Descriptor {
+            .ShaderRegister = 0,
+            .RegisterSpace = 0
+        },
+        // This constant buffer will just be accessed in a vertex shader
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX
+    };
+
+    // Create an empty root signature.
+    const D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
+        .NumParameters = 1,
+        .pParameters = &rootParameter,
+        .NumStaticSamplers = 0,
+        .pStaticSamplers = nullptr,
+        .Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | 
+                    D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+                    D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+                    D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+                    D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS | D3D12_ROOT_SIGNATURE_FLAG_DENY_MESH_SHADER_ROOT_ACCESS
+    };
+
+    ID3DBlob* signature = nullptr;
+    ID3DBlob* error = nullptr;
+    HRESULT hRes = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "D3D12SerializeRootSignature failed: %ld\n", hRes);
+        return false;
+    }
+
+    hRes = s_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&s_rootSignature));
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "CreateRootSignature failed: %ld\n", hRes);
+        return false;
+    }
+
+    return true;
+}
+
 static auto CreateBasicPipelineStateObject() -> bool
 {
     D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.vert.cso");
@@ -703,7 +691,7 @@ static auto CreateBasicPipelineStateObject() -> bool
         if (vertexShaderObj.pShaderBytecode == nullptr || vertexShaderObj.BytecodeLength == 0) break;
         if (pixelShaderObj.pShaderBytecode == nullptr || pixelShaderObj.BytecodeLength == 0) break;
 
-        // Define the vertex input layout.
+        // Define the vertex input layout used for Input Assembler
         const D3D12_INPUT_ELEMENT_DESC inputElementDescs[] {
             { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
             { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
@@ -779,21 +767,21 @@ static auto CreateBasicPipelineStateObject() -> bool
             .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
         };
 
-        HRESULT hRes = s_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_basicPipelineState));
+        HRESULT hRes = s_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_pipelineState));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateGraphicsPipelineState for basic PSO failed: %ld\n", hRes);
             break;
         }
 
-        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_commandAllocator, s_basicPipelineState, IID_PPV_ARGS(&s_basicCommandList));
+        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_commandAllocator, s_pipelineState, IID_PPV_ARGS(&s_commandList));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateCommandList for basic PSO failed: %ld\n", hRes);
             break;
         }
 
-        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, s_commandBundleAllocator, s_basicPipelineState, IID_PPV_ARGS(&s_basicCommandBundle));
+        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, s_commandBundleAllocator, s_pipelineState, IID_PPV_ARGS(&s_commandBundle));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateCommandList for command bundle failed: %ld\n", hRes);
@@ -814,7 +802,7 @@ static auto CreateBasicPipelineStateObject() -> bool
     return done;
 }
 
-static auto CreateVertexBuffer() -> bool
+static auto CreateBasicVertexBuffer() -> bool
 {
     const struct Vertex
     {
@@ -886,9 +874,9 @@ static auto CreateVertexBuffer() -> bool
     memcpy(hostMemPtr, squareVertices, sizeof(squareVertices));
     s_devHostBuffer->Unmap(0, nullptr);
 
-    WriteToDeviceResourceAndSync(s_basicCommandList, sizeof(squareVertices), s_vertexBuffer, s_devHostBuffer);
+    WriteToDeviceResourceAndSync(s_commandList, sizeof(squareVertices), s_vertexBuffer, s_devHostBuffer);
 
-    hRes = s_basicCommandList->Close();
+    hRes = s_commandList->Close();
     if (FAILED(hRes))
     {
         fprintf(stderr, "Close basic command list failed: %ld\n", hRes);
@@ -896,7 +884,7 @@ static auto CreateVertexBuffer() -> bool
     }
 
     // Execute the command list to complete the copy operation
-    ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)s_basicCommandList };
+    ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)s_commandList };
     s_commandQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
 
     // Initialize the vertex buffer view.
@@ -947,14 +935,14 @@ static auto CreateVertexBuffer() -> bool
     s_device->CreateConstantBufferView(&cbvDesc, s_cbvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
     // Record commands to the command list bundle.
-    s_basicCommandBundle->SetGraphicsRootSignature(s_rootSignature);
-    s_basicCommandBundle->SetGraphicsRootConstantBufferView(0, s_constantBuffer->GetGPUVirtualAddress());
-    s_basicCommandBundle->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-    s_basicCommandBundle->IASetVertexBuffers(0, 1, &vertexBufferView);
-    s_basicCommandBundle->DrawInstanced((UINT)std::size(squareVertices), 1, 0, 0);
+    s_commandBundle->SetGraphicsRootSignature(s_rootSignature);
+    s_commandBundle->SetGraphicsRootConstantBufferView(0, s_constantBuffer->GetGPUVirtualAddress());
+    s_commandBundle->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    s_commandBundle->IASetVertexBuffers(0, 1, &vertexBufferView);
+    s_commandBundle->DrawInstanced((UINT)std::size(squareVertices), 1, 0, 0);
 
     // End of the record
-    hRes = s_basicCommandBundle->Close();
+    hRes = s_commandBundle->Close();
     if (FAILED(hRes))
     {
         fprintf(stderr, "Close basic command bundle failed: %ld\n", hRes);
@@ -978,7 +966,7 @@ static auto PopulateCommandList() -> bool
         return false;
     }
 
-    hRes = s_basicCommandList->Reset(s_commandAllocator, s_basicPipelineState);
+    hRes = s_commandList->Reset(s_commandAllocator, s_pipelineState);
     if (FAILED(hRes))
     {
         fprintf(stderr, "Reset basic command list failed: %ld\n", hRes);
@@ -995,7 +983,7 @@ static auto PopulateCommandList() -> bool
         .MinDepth = 0.0f,
         .MaxDepth = 3.0f
     };
-    s_basicCommandList->RSSetViewports(1, &viewPort);
+    s_commandList->RSSetViewports(1, &viewPort);
 
     const D3D12_RECT scissorRect{
         .left = 0,
@@ -1003,7 +991,7 @@ static auto PopulateCommandList() -> bool
         .right = WINDOW_WIDTH,
         .bottom = WINDOW_HEIGHT
     };
-    s_basicCommandList->RSSetScissorRects(1, &scissorRect);
+    s_commandList->RSSetScissorRects(1, &scissorRect);
 
     // Indicate that the back buffer will be used as a render target.
     const D3D12_RESOURCE_BARRIER renderBarrier = {
@@ -1016,35 +1004,43 @@ static auto PopulateCommandList() -> bool
             .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
         }
     };
-    s_basicCommandList->ResourceBarrier(1, &renderBarrier);
+    s_commandList->ResourceBarrier(1, &renderBarrier);
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = s_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
     rtvHandle.ptr += size_t(s_currFrameIndex * s_rtvDescriptorSize);
-    s_basicCommandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
+    s_commandList->OMSetRenderTargets(1, &rtvHandle, FALSE, nullptr);
 
     const float clearColor[] = { 0.5f, 0.6f, 0.5f, 1.0f };
-    s_basicCommandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
+    s_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
-    // Update constant buffer content
-    const float constantBuffer[CONSTANT_BUFFER_ALLOCATION_GRANULARITY / sizeof(float)]{ s_rotateAngle };
-
-    D3D12_RANGE readRange { 0, 0 };
-    void* hostMemPtr = nullptr;
-    hRes = s_constantBuffer->Map(0, &readRange, &hostMemPtr);
-    if (FAILED(hRes))
+    // Update the constant buffer content
+    if (s_constantBuffer != nullptr)
     {
-        fprintf(stderr, "Map constant buffer failed: %ld\n", hRes);
-        return false;
+        const float constantBuffer[CONSTANT_BUFFER_ALLOCATION_GRANULARITY / sizeof(float)]{ s_rotateAngle };
+
+        D3D12_RANGE readRange{ 0, 0 };
+        void* hostMemPtr = nullptr;
+        hRes = s_constantBuffer->Map(0, &readRange, &hostMemPtr);
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "Map constant buffer failed: %ld\n", hRes);
+            return false;
+        }
+
+        memcpy(hostMemPtr, constantBuffer, sizeof(constantBuffer));
+        s_constantBuffer->Unmap(0, nullptr);
+    }
+    
+    // Execute the bundle to the command list
+    if (s_commandBundle != nullptr) {
+        s_commandList->ExecuteBundle(s_commandBundle);
     }
 
-    memcpy(hostMemPtr, constantBuffer, sizeof(constantBuffer));
-    s_constantBuffer->Unmap(0, nullptr);
-
-    // Execute the bundle to the command list
-    s_basicCommandList->ExecuteBundle(s_basicCommandBundle);
-
-    if (++s_rotateAngle >= 360.0f) {
-        s_rotateAngle = 0.0f;
+    if (s_constantBuffer != nullptr)
+    {
+        if (++s_rotateAngle >= 360.0f) {
+            s_rotateAngle = 0.0f;
+        }
     }
 
     // Indicate that the back buffer will now be used to present.
@@ -1058,10 +1054,10 @@ static auto PopulateCommandList() -> bool
             .StateAfter = D3D12_RESOURCE_STATE_PRESENT
         }
     };
-    s_basicCommandList->ResourceBarrier(1, &presentBarrier);
+    s_commandList->ResourceBarrier(1, &presentBarrier);
 
     // End of the record
-    hRes = s_basicCommandList->Close();
+    hRes = s_commandList->Close();
     if (FAILED(hRes))
     {
         fprintf(stderr, "Close basic command list failed: %ld\n", hRes);
@@ -1073,10 +1069,12 @@ static auto PopulateCommandList() -> bool
 
 static auto Render() -> bool
 {
+    if (s_commandList == nullptr) return false;
+
     if (!PopulateCommandList()) return false;
 
     // Execute the command list.
-    ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)s_basicCommandList };
+    ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)s_commandList };
     s_commandQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
 
     // Present the frame.
@@ -1120,20 +1118,20 @@ static auto DestroyAllAssets() -> void
         s_vertexBuffer->Release();
         s_vertexBuffer = nullptr;
     }
-    if (s_basicCommandBundle != nullptr)
+    if (s_commandBundle != nullptr)
     {
-        s_basicCommandBundle->Release();
-        s_basicCommandBundle = nullptr;
+        s_commandBundle->Release();
+        s_commandBundle = nullptr;
     }
-    if (s_basicCommandList != nullptr)
+    if (s_commandList != nullptr)
     {
-        s_basicCommandList->Release();
-        s_basicCommandList = nullptr;
+        s_commandList->Release();
+        s_commandList = nullptr;
     }
-    if (s_basicPipelineState != nullptr)
+    if (s_pipelineState != nullptr)
     {
-        s_basicPipelineState->Release();
-        s_basicPipelineState = nullptr;
+        s_pipelineState->Release();
+        s_pipelineState = nullptr;
     }
     if (s_rootSignature != nullptr)
     {
@@ -1217,9 +1215,7 @@ static auto CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         (void)hdc;
 
         // 我们这里再绘制一帧
-        if (s_basicPipelineState != nullptr) {
-            Render();
-        }
+        Render();
 
         EndPaint(hWnd, &ps);
 
@@ -1319,6 +1315,28 @@ auto main(int argc, const char* argv[]) -> int
 {
     if (!CreateD3D12Device()) return 1;
 
+    puts("\n================================\n\nPlease choose which mode to render:");
+    puts("[0]: Basic Rendering");
+
+    long totalItemCount = 1;
+
+    if (s_supportMeshShader)
+    {
+        puts("[1]: Basic Mesh Shader Rendering");
+        totalItemCount += 3;
+    }
+
+    char cmdBuf[256]{ };
+    gets_s(cmdBuf);
+
+    char* endChar = nullptr;
+    long selectedRenderModeIndex = std::strtol(cmdBuf, &endChar, 10);
+    if (selectedRenderModeIndex < 0 || selectedRenderModeIndex >= totalItemCount)
+    {
+        puts("WARNING: The index you input exceeds the range of available rendering mode count. So render mode [0] will be used!");
+        selectedRenderModeIndex = 0;
+    }
+
     bool done = false;
 
     // Windows Instance
@@ -1332,10 +1350,31 @@ auto main(int argc, const char* argv[]) -> int
         if (!CreateCommandQueue()) break;
         if (!CreateSwapChain(wndHandle)) break;
         if (!CreateRenderTargetViews()) break;
-        if (!CreateRootSignature()) break;
         if (!CreateFenceAndEvent()) break;
-        if (!CreateBasicPipelineStateObject()) break;
-        if (!CreateVertexBuffer()) break;
+
+        if (selectedRenderModeIndex == 0)
+        {
+            if (!CreateBasicRootSignature()) break;
+            if (!CreateBasicPipelineStateObject()) break;
+            if (!CreateBasicVertexBuffer()) break;
+        }
+        else if(selectedRenderModeIndex == 1)
+        {
+            auto externalAssets = CreateMeshShaderTestAssets(s_device, s_commandAllocator, s_commandBundleAllocator);
+
+            s_rootSignature = std::get<0>(externalAssets);
+            if (s_rootSignature == nullptr) break;
+
+            s_pipelineState = std::get<1>(externalAssets);
+            if (s_pipelineState == nullptr) break;
+
+            s_commandList = std::get<2>(externalAssets);
+            if (s_commandList == nullptr) break;
+
+            s_commandBundle = std::get<3>(externalAssets);
+            if (s_commandBundle == nullptr) break;
+        }
+
         if (!Render()) break;
 
         done = true;
