@@ -119,9 +119,11 @@ extern auto WaitForPreviousFrame(ID3D12CommandQueue* commandQueue) -> bool;
 
 extern auto WriteToDeviceResourceAndSync(
     _In_ ID3D12GraphicsCommandList* pCmdList,
-    size_t dataSize,
     _In_ ID3D12Resource* pDestinationResource,
-    _In_ ID3D12Resource* pIntermediate) -> void;
+    _In_ ID3D12Resource* pIntermediate,
+    size_t dstOffset,
+    size_t srcOffset,
+    size_t dataSize) -> void;
 
 extern auto SyncAndReadFromDeviceResource(
     _In_ ID3D12GraphicsCommandList* pCmdList,

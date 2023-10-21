@@ -48,9 +48,11 @@ static float s_rotateAngle = 0.0f;
 
 auto WriteToDeviceResourceAndSync(
     _In_ ID3D12GraphicsCommandList* pCmdList,
-    size_t dataSize,
     _In_ ID3D12Resource* pDestinationResource,
-    _In_ ID3D12Resource* pIntermediate) -> void
+    _In_ ID3D12Resource* pIntermediate,
+    size_t dstOffset,
+    size_t srcOffset,
+    size_t dataSize) -> void
 {
     const D3D12_RESOURCE_BARRIER beginCopyBarrier = {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -64,15 +66,7 @@ auto WriteToDeviceResourceAndSync(
     };
     pCmdList->ResourceBarrier(1, &beginCopyBarrier);
 
-    UINT64 requiredSize = 0;
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprintLayouts{ };
-    UINT64 rowSizeInBytes = UINT64(dataSize);
-    UINT numRows = 1;
-
-    const D3D12_RESOURCE_DESC Desc = pDestinationResource->GetDesc();
-    s_device->GetCopyableFootprints(&Desc, 0, 1, 0, &footprintLayouts, &numRows, &rowSizeInBytes, &requiredSize);
-
-    pCmdList->CopyBufferRegion(pDestinationResource, 0, pIntermediate, footprintLayouts.Offset, footprintLayouts.Footprint.Width);
+    pCmdList->CopyBufferRegion(pDestinationResource, UINT64(dstOffset), pIntermediate, UINT64(srcOffset), dataSize);
     
     const D3D12_RESOURCE_BARRIER endCopyBarrier = {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -908,7 +902,7 @@ static auto CreateBasicVertexBuffer() -> bool
     memcpy(hostMemPtr, squareVertices, sizeof(squareVertices));
     s_devHostBuffer->Unmap(0, nullptr);
 
-    WriteToDeviceResourceAndSync(s_commandList, sizeof(squareVertices), s_vertexBuffer, s_devHostBuffer);
+    WriteToDeviceResourceAndSync(s_commandList, s_vertexBuffer, s_devHostBuffer, 0U, 0U, sizeof(squareVertices));
 
     hRes = s_commandList->Close();
     if (FAILED(hRes))

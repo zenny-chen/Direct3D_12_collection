@@ -345,7 +345,7 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
     memcpy(hostMemPtr, squareVertices, sizeof(squareVertices));
     uploadDevHostBuffer->Unmap(0, nullptr);
 
-    WriteToDeviceResourceAndSync(commandList, sizeof(squareVertices), vertexBuffer, uploadDevHostBuffer);
+    WriteToDeviceResourceAndSync(commandList, vertexBuffer, uploadDevHostBuffer, 0U, 0U, sizeof(squareVertices));
 
     hRes = commandList->Close();
     if (FAILED(hRes))
