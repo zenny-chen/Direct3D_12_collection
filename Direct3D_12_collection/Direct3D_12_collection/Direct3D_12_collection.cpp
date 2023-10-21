@@ -235,7 +235,7 @@ static auto QueryDeviceSupportedMaxFeatureLevel() -> bool
 
 static auto QueryDeviceShaderModel() -> bool
 {
-    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel { .HighestShaderModel = D3D_SHADER_MODEL_6_7 };
+    D3D12_FEATURE_DATA_SHADER_MODEL shaderModel { .HighestShaderModel = D3D_HIGHEST_SHADER_MODEL };
     auto const hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel));
     if (FAILED(hRes))
     {
