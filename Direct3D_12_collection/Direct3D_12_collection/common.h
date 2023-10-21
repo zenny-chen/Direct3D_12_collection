@@ -103,7 +103,19 @@ struct alignas(sizeof(void*)) FlagsSubobject
     D3D12_PIPELINE_STATE_FLAGS flags;
 };
 
+enum MeshShaderExecMode
+{
+    BASIC_MODE,
+    ONLY_MESH_SHADER_MODE
+};
+
+// Defined by the Direct3D 12 Spec
+static constexpr UINT CONSTANT_BUFFER_ALLOCATION_GRANULARITY = 256U;
+
 extern auto CreateCompiledShaderObjectFromPath(const char csoPath[]) -> D3D12_SHADER_BYTECODE;
+
+// Used to sync commandQueue->ExecuteCommandLists 
+extern auto WaitForPreviousFrame(ID3D12CommandQueue* commandQueue) -> bool;
 
 extern auto WriteToDeviceResourceAndSync(
     _In_ ID3D12GraphicsCommandList* pCmdList,
@@ -111,6 +123,20 @@ extern auto WriteToDeviceResourceAndSync(
     _In_ ID3D12Resource* pDestinationResource,
     _In_ ID3D12Resource* pIntermediate) -> void;
 
-extern auto CreateMeshShaderTestAssets(ID3D12Device* d3d_device, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+extern auto SyncAndReadFromDeviceResource(
+    _In_ ID3D12GraphicsCommandList* pCmdList,
+    size_t dataSize,
+    _In_ ID3D12Resource* pDestinationHostBuffer,
+    _In_ ID3D12Resource* pSourceUAVBuffer) -> void;
+
+extern auto CreateTransformFeedbackTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>;
+
+extern auto RenderPostProcessForTransformFeedback() -> void;
+
+extern auto CreateMeshShaderTestAssets(MeshShaderExecMode execMode, ID3D12Device* d3d_device, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
                                         std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*>;
+
+extern auto CreateMeshShaderNoRasterTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12Resource*, ID3D12Resource*, ID3D12DescriptorHeap*>;
 

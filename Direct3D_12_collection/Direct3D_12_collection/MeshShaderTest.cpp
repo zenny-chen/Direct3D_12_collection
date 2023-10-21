@@ -1,19 +1,37 @@
 #include "common.h"
 
-static auto CreateMeshShaderBasicRootSignature(ID3D12Device *d3d_device) -> ID3D12RootSignature*
+static auto CreateMeshShaderBasicRootSignature(MeshShaderExecMode execMode, ID3D12Device *d3d_device) -> ID3D12RootSignature*
 {
     ID3D12RootSignature* rootSignature = nullptr;
 
-    // Create an empty root signature.
+    const D3D12_ROOT_PARAMETER rootParameter{
+        .ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+        .Constants {
+            .ShaderRegister = 0,
+            .RegisterSpace = 0,
+            .Num32BitValues = 16    // store 4 float4 colors
+        },
+        .ShaderVisibility = D3D12_SHADER_VISIBILITY_MESH
+    };
+
+    const UINT nParameters = execMode == MeshShaderExecMode::ONLY_MESH_SHADER_MODE ? 1U : 0U;
+    const D3D12_ROOT_PARAMETER* pRootParameter = execMode == MeshShaderExecMode::ONLY_MESH_SHADER_MODE ? &rootParameter : nullptr;
+    D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
+                                        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+                                        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+                                        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+
+    if (execMode == MeshShaderExecMode::ONLY_MESH_SHADER_MODE) {
+        flags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_AMPLIFICATION_SHADER_ROOT_ACCESS;
+    }
+
+    // Create a root signature.
     const D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc = {
-        .NumParameters = 0,
-        .pParameters = nullptr,
+        .NumParameters = nParameters,
+        .pParameters = pRootParameter,
         .NumStaticSamplers = 0,
         .pStaticSamplers = nullptr,
-        .Flags = D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
-                    D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-                    D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-                    D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS
+        .Flags = flags
     };
 
     ID3DBlob* signature = nullptr;
@@ -35,13 +53,27 @@ static auto CreateMeshShaderBasicRootSignature(ID3D12Device *d3d_device) -> ID3D
     return rootSignature;
 }
 
-static auto CreateMeshShaderBasicPipelineStateObject(ID3D12Device2* d3d_device, ID3D12RootSignature* rootSignature,
+static auto CreateMeshShaderBasicPipelineStateObject(MeshShaderExecMode execMode, ID3D12Device2* d3d_device, ID3D12RootSignature* rootSignature,
                                                     ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
             std::tuple<ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*>
 {
-    D3D12_SHADER_BYTECODE amplificationShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.amplification.cso");
-    D3D12_SHADER_BYTECODE meshShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.mesh.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+    D3D12_SHADER_BYTECODE amplificationShaderObj{ };
+    D3D12_SHADER_BYTECODE meshShaderObj{ };
+    D3D12_SHADER_BYTECODE pixelShaderObj{ };
+
+    switch (execMode)
+    {
+    case MeshShaderExecMode::BASIC_MODE:
+        amplificationShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.amplification.cso");
+        meshShaderObj = meshShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.mesh.cso");
+        pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+        break;
+
+    case MeshShaderExecMode::ONLY_MESH_SHADER_MODE:
+        meshShaderObj = meshShaderObj = CreateCompiledShaderObjectFromPath("shaders/msonly.mesh.cso");
+        pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+        break;
+    }
 
     ID3D12PipelineState* pipelineState = nullptr;
     ID3D12GraphicsCommandList* commandList = nullptr;
@@ -52,8 +84,12 @@ static auto CreateMeshShaderBasicPipelineStateObject(ID3D12Device2* d3d_device, 
     bool done = false;
     do
     {
-        if (amplificationShaderObj.pShaderBytecode == nullptr || amplificationShaderObj.BytecodeLength == 0) break;
+        if (execMode == MeshShaderExecMode::BASIC_MODE) {
+            if (amplificationShaderObj.pShaderBytecode == nullptr || amplificationShaderObj.BytecodeLength == 0) break;
+        }
+
         if (meshShaderObj.pShaderBytecode == nullptr || meshShaderObj.BytecodeLength == 0) break;
+
         if (pixelShaderObj.pShaderBytecode == nullptr || pixelShaderObj.BytecodeLength == 0) break;
 
         // Describe and create the graphics pipeline state object (PSO).
@@ -193,7 +229,7 @@ static auto CreateMeshShaderBasicPipelineStateObject(ID3D12Device2* d3d_device, 
     return result;
 }
 
-static auto PopulateMeshShaderCommandBundleList(ID3D12RootSignature *rootSignature, 
+static auto PopulateMeshShaderCommandBundleList(MeshShaderExecMode execMode, ID3D12RootSignature *rootSignature,
                                             ID3D12GraphicsCommandList *commandList, ID3D12GraphicsCommandList6 *commandBundleList) -> bool
 {
     // No subsequent commands need be recorded into this command list,
@@ -207,8 +243,29 @@ static auto PopulateMeshShaderCommandBundleList(ID3D12RootSignature *rootSignatu
 
     // Record commands to the command list bundle.
     commandBundleList->SetGraphicsRootSignature(rootSignature);
-    commandBundleList->DispatchMesh(1U, 1U, 1U);
 
+    if (execMode == MeshShaderExecMode::ONLY_MESH_SHADER_MODE)
+    {
+        const struct
+        {
+            float bottomLeft[4];
+            float topLeft[4];
+            float bottomRight[4];
+            float topRight[4];
+        } colorVaryings = {
+            { 0.9f, 0.1f, 0.1f, 1.0f },     // red
+            { 0.1f, 0.9f, 0.1f, 1.0f },     // green
+            { 0.1f, 0.1f, 0.9f, 1.0f },     // blue
+            { 0.9f, 0.9f, 0.1f, 1.0f }      // yellow
+        };
+
+        commandBundleList->SetGraphicsRoot32BitConstants(0, 16, &colorVaryings, 0);
+        commandBundleList->DispatchMesh(4U, 1U, 1U);
+    }
+    else {
+        commandBundleList->DispatchMesh(1U, 1U, 1U);
+    }
+    
     // End of the record
     hRes = commandBundleList->Close();
     if (FAILED(hRes))
@@ -220,7 +277,7 @@ static auto PopulateMeshShaderCommandBundleList(ID3D12RootSignature *rootSignatu
     return true;
 }
 
-auto CreateMeshShaderTestAssets(ID3D12Device* d3d_device, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+auto CreateMeshShaderTestAssets(MeshShaderExecMode execMode, ID3D12Device* d3d_device, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
                                 std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*>
 {
     ID3D12RootSignature* rootSignature = nullptr;
@@ -230,15 +287,15 @@ auto CreateMeshShaderTestAssets(ID3D12Device* d3d_device, ID3D12CommandAllocator
 
     std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*> result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList);
 
-    rootSignature = CreateMeshShaderBasicRootSignature(d3d_device);
+    rootSignature = CreateMeshShaderBasicRootSignature(execMode, d3d_device);
     if (rootSignature == nullptr) return result;
 
-    auto pipelineRes = CreateMeshShaderBasicPipelineStateObject((ID3D12Device2*)d3d_device, rootSignature, commandAllocator, commandBundleAllocator);
+    auto pipelineRes = CreateMeshShaderBasicPipelineStateObject(execMode, (ID3D12Device2*)d3d_device, rootSignature, commandAllocator, commandBundleAllocator);
     pipelineState = std::get<0>(pipelineRes);
     commandList = std::get<1>(pipelineRes);
     commandBundleList = std::get<2>(pipelineRes);
 
-    if (!PopulateMeshShaderCommandBundleList(rootSignature, commandList, (ID3D12GraphicsCommandList6*)commandBundleList)) return result;
+    if (!PopulateMeshShaderCommandBundleList(execMode, rootSignature, commandList, (ID3D12GraphicsCommandList6*)commandBundleList)) return result;
 
     result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList);
     return result;

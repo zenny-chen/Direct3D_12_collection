@@ -24,6 +24,12 @@
     <ClCompile Include="MeshShaderTest.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="MeshShaderNoRasterTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="TransformFeedbackTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\basic.frag.hlsl">
@@ -36,6 +42,15 @@
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\ms.mesh.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\msonly.mesh.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\simple_ms.mesh.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\tfb_basic.vert.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
   </ItemGroup>

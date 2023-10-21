@@ -7,7 +7,6 @@ static constexpr UINT MAX_HARDWARE_ADAPTER_COUNT = 16;
 static constexpr UINT TOTAL_FRAME_COUNT = 5;
 static constexpr int WINDOW_WIDTH = 640;
 static constexpr int WINDOW_HEIGHT = 640;
-static constexpr UINT CONSTANT_BUFFER_ALLOCATION_GRANULARITY = 256U;
 
 static IDXGIFactory4* s_factory = nullptr;
 static ID3D12Device* s_device = nullptr;
@@ -17,7 +16,7 @@ static ID3D12CommandAllocator* s_commandBundleAllocator = nullptr;
 static IDXGISwapChain3* s_swapChain = nullptr;
 static ID3D12DescriptorHeap* s_rtvDescriptorHeap = nullptr;
 static UINT s_rtvDescriptorSize = 0;
-static ID3D12DescriptorHeap* s_cbvDescriptorHeap = nullptr;
+static ID3D12DescriptorHeap* s_descriptorHeap = nullptr;
 static ID3D12RootSignature* s_rootSignature = nullptr;
 static ID3D12PipelineState* s_pipelineState = nullptr;
 static ID3D12GraphicsCommandList* s_commandList = nullptr;
@@ -25,8 +24,11 @@ static ID3D12GraphicsCommandList* s_commandBundle = nullptr;
 static ID3D12Resource* s_renderTargets[TOTAL_FRAME_COUNT]{ };
 // Host visible device buffer as an intermediate upload buffer
 static ID3D12Resource* s_devHostBuffer = nullptr;
+static ID3D12Resource* s_readbackHostBuffer = nullptr;
 static ID3D12Resource* s_vertexBuffer = nullptr;
 static ID3D12Resource* s_constantBuffer = nullptr;
+static ID3D12Resource* s_uavBuffer = nullptr;
+static auto (*s_renderPostProcessFunc)() -> void = nullptr;
 
 // Synchronization objects.
 static UINT s_currFrameIndex = 0;
@@ -80,6 +82,39 @@ auto WriteToDeviceResourceAndSync(
             .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
             .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
             .StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ
+        }
+    };
+    pCmdList->ResourceBarrier(1, &endCopyBarrier);
+}
+
+auto SyncAndReadFromDeviceResource(
+    _In_ ID3D12GraphicsCommandList* pCmdList,
+    size_t dataSize,
+    _In_ ID3D12Resource* pDestinationHostBuffer,
+    _In_ ID3D12Resource* pSourceUAVBuffer) -> void
+{
+    const D3D12_RESOURCE_BARRIER beginCopyBarrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition {
+            .pResource = pSourceUAVBuffer,
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+            .StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE
+        }
+    };
+    pCmdList->ResourceBarrier(1, &beginCopyBarrier);
+
+    pCmdList->CopyResource(pDestinationHostBuffer, pSourceUAVBuffer);
+
+    const D3D12_RESOURCE_BARRIER endCopyBarrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition {
+            .pResource = pSourceUAVBuffer,
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE,
+            .StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS
         }
     };
     pCmdList->ResourceBarrier(1, &endCopyBarrier);
@@ -572,13 +607,13 @@ static auto CreateRenderTargetViews() -> bool
         rtvHandle.ptr += s_rtvDescriptorSize;
     }
 
-    const D3D12_DESCRIPTOR_HEAP_DESC cbvHeapDesc{
+    const D3D12_DESCRIPTOR_HEAP_DESC cbv_uavHeapDesc{
         .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 1,
+        .NumDescriptors = 1U,
         .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
         .NodeMask = 0
     };
-    hRes = s_device->CreateDescriptorHeap(&cbvHeapDesc, IID_PPV_ARGS(&s_cbvDescriptorHeap));
+    hRes = s_device->CreateDescriptorHeap(&cbv_uavHeapDesc, IID_PPV_ARGS(&s_descriptorHeap));
     if (FAILED(hRes))
     {
         fprintf(stderr, "CreateDescriptorHeap for constant buffer view failed: %ld\n", hRes);
@@ -608,8 +643,7 @@ static auto CreateFenceAndEvent() -> bool
     return true;
 }
 
-// 等待上一帧处理完成
-static auto WaitForPreviousFrame(void) -> bool
+auto WaitForPreviousFrame(ID3D12CommandQueue *commandQueue) -> bool
 {
     // WAITING FOR THE FRAME TO COMPLETE BEFORE CONTINUING IS NOT BEST PRACTICE.
     // This is code implemented as such for simplicity. The D3D12HelloFrameBuffering
@@ -618,7 +652,7 @@ static auto WaitForPreviousFrame(void) -> bool
 
     // Signal and increment the fence value.
     auto const fence = ++s_fenceValue;
-    HRESULT hRes = s_commandQueue->Signal(s_fence, fence);
+    HRESULT hRes = commandQueue->Signal(s_fence, fence);
     if (FAILED(hRes)) return false;
 
     // Wait until the previous frame is finished.
@@ -932,7 +966,7 @@ static auto CreateBasicVertexBuffer() -> bool
         .BufferLocation = s_constantBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = CONSTANT_BUFFER_ALLOCATION_GRANULARITY
     };
-    s_device->CreateConstantBufferView(&cbvDesc, s_cbvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+    s_device->CreateConstantBufferView(&cbvDesc, s_descriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
     // Record commands to the command list bundle.
     s_commandBundle->SetGraphicsRootSignature(s_rootSignature);
@@ -952,7 +986,7 @@ static auto CreateBasicVertexBuffer() -> bool
     // Wait for the command list to execute;
     // we are reusing the same command list in our main loop but for now,
     // we just want to wait for setup to complete before continuing.
-    WaitForPreviousFrame();
+    WaitForPreviousFrame(s_commandQueue);
 
     return true;
 }
@@ -1013,6 +1047,13 @@ static auto PopulateCommandList() -> bool
     const float clearColor[] = { 0.5f, 0.6f, 0.5f, 1.0f };
     s_commandList->ClearRenderTargetView(rtvHandle, clearColor, 0, nullptr);
 
+    if (s_renderPostProcessFunc != nullptr)
+    {
+        // If command bundle list has recorded the SetDescriptorHeaps, the corresponding command list MUST also record this SetDescriptorHeaps.
+        ID3D12DescriptorHeap* const descHeaps[]{ s_descriptorHeap };
+        s_commandList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
+    }
+
     // Update the constant buffer content
     if (s_constantBuffer != nullptr)
     {
@@ -1041,6 +1082,11 @@ static auto PopulateCommandList() -> bool
         if (++s_rotateAngle >= 360.0f) {
             s_rotateAngle = 0.0f;
         }
+    }
+
+    if (s_renderPostProcessFunc != nullptr) {
+        // Read back the UAV buffer which stores the vertex info
+        SyncAndReadFromDeviceResource(s_commandList, 128, s_readbackHostBuffer, s_uavBuffer);
     }
 
     // Indicate that the back buffer will now be used to present.
@@ -1085,7 +1131,11 @@ static auto Render() -> bool
         return false;
     }
 
-    if (!WaitForPreviousFrame()) return false;
+    if (!WaitForPreviousFrame(s_commandQueue)) return false;
+
+    if (s_renderPostProcessFunc != nullptr) {
+        s_renderPostProcessFunc();
+    }
 
     return true;
 }
@@ -1107,6 +1157,16 @@ static auto DestroyAllAssets() -> void
     {
         s_constantBuffer->Release();
         s_constantBuffer = nullptr;
+    }
+    if (s_uavBuffer != nullptr)
+    {
+        s_uavBuffer->Release();
+        s_uavBuffer = nullptr;
+    }
+    if (s_readbackHostBuffer != nullptr)
+    {
+        s_readbackHostBuffer->Release();
+        s_readbackHostBuffer = nullptr;
     }
     if (s_devHostBuffer != nullptr)
     {
@@ -1146,10 +1206,10 @@ static auto DestroyAllAssets() -> void
             s_renderTargets[i] = nullptr;
         }
     }
-    if (s_cbvDescriptorHeap != nullptr)
+    if (s_descriptorHeap != nullptr)
     {
-        s_cbvDescriptorHeap->Release();
-        s_cbvDescriptorHeap = nullptr;
+        s_descriptorHeap->Release();
+        s_descriptorHeap = nullptr;
     }
     if (s_rtvDescriptorHeap != nullptr)
     {
@@ -1318,11 +1378,16 @@ auto main(int argc, const char* argv[]) -> int
     puts("\n================================\n\nPlease choose which mode to render:");
     puts("[0]: Basic Rendering");
 
-    long totalItemCount = 1;
+    long totalItemCount = 2;
+
+    puts("[1]: Transform Feedback");
 
     if (s_supportMeshShader)
     {
-        puts("[1]: Basic Mesh Shader Rendering");
+        puts("[2]: Basic Mesh Shader Rendering");
+        puts("[3]: Only Mesh Shader Rendering");
+        puts("[4]: Mesh Shader Without Rasterization Rendering");
+
         totalItemCount += 3;
     }
 
@@ -1345,6 +1410,7 @@ auto main(int argc, const char* argv[]) -> int
     // window handle
     HWND wndHandle = CreateAndInitializeWindow(wndInstance, s_appName, WINDOW_WIDTH, WINDOW_HEIGHT);
 
+    bool needRender = true;
     do
     {
         if (!CreateCommandQueue()) break;
@@ -1358,9 +1424,40 @@ auto main(int argc, const char* argv[]) -> int
             if (!CreateBasicPipelineStateObject()) break;
             if (!CreateBasicVertexBuffer()) break;
         }
-        else if(selectedRenderModeIndex == 1)
+        else if (selectedRenderModeIndex == 1)
         {
-            auto externalAssets = CreateMeshShaderTestAssets(s_device, s_commandAllocator, s_commandBundleAllocator);
+            auto externalAssets = CreateTransformFeedbackTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+
+            s_rootSignature = std::get<0>(externalAssets);
+            if (s_rootSignature == nullptr) break;
+
+            s_pipelineState = std::get<1>(externalAssets);
+            if (s_pipelineState == nullptr) break;
+
+            s_commandList = std::get<2>(externalAssets);
+            if (s_commandList == nullptr) break;
+
+            s_commandBundle = std::get<3>(externalAssets);
+            if (s_commandBundle == nullptr) break;
+
+            if (s_descriptorHeap != nullptr)
+            {
+                s_descriptorHeap->Release();
+                s_descriptorHeap = nullptr;
+            }
+            s_descriptorHeap = std::get<4>(externalAssets);
+            s_devHostBuffer = std::get<5>(externalAssets);
+            s_readbackHostBuffer = std::get<6>(externalAssets);
+            s_vertexBuffer = std::get<7>(externalAssets);
+            s_uavBuffer = std::get<8>(externalAssets);
+            s_constantBuffer = std::get<9>(externalAssets);
+
+            s_renderPostProcessFunc = RenderPostProcessForTransformFeedback;
+        }
+        else if(selectedRenderModeIndex < 4)
+        {
+            auto const execMode = MeshShaderExecMode(selectedRenderModeIndex - 2);
+            auto externalAssets = CreateMeshShaderTestAssets(execMode, s_device, s_commandAllocator, s_commandBundleAllocator);
 
             s_rootSignature = std::get<0>(externalAssets);
             if (s_rootSignature == nullptr) break;
@@ -1374,9 +1471,38 @@ auto main(int argc, const char* argv[]) -> int
             s_commandBundle = std::get<3>(externalAssets);
             if (s_commandBundle == nullptr) break;
         }
+        else if (selectedRenderModeIndex == 4)
+        {
+            auto externalAssets = CreateMeshShaderNoRasterTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
 
-        if (!Render()) break;
+            s_rootSignature = std::get<0>(externalAssets);
+            if (s_rootSignature == nullptr) break;
 
+            s_pipelineState = std::get<1>(externalAssets);
+            if (s_pipelineState == nullptr) break;
+
+            s_commandList = std::get<2>(externalAssets);
+            if (s_commandList == nullptr) break;
+
+            s_commandBundle = std::get<3>(externalAssets);
+            if (s_commandBundle == nullptr) break;
+
+            s_devHostBuffer = std::get<4>(externalAssets);
+            s_uavBuffer = std::get<5>(externalAssets);
+            if (s_descriptorHeap != nullptr)
+            {
+                s_descriptorHeap->Release();
+                s_descriptorHeap = nullptr;
+            }
+            s_descriptorHeap = std::get<6>(externalAssets);
+
+            needRender = false;
+        }
+
+        if (needRender) {
+            if (!Render()) break;
+        }
+        
         done = true;
     }
     while (false);
@@ -1385,6 +1511,12 @@ auto main(int argc, const char* argv[]) -> int
     {
         DestroyAllAssets();
         return 1;
+    }
+
+    if (!needRender)
+    {
+        DestroyAllAssets();
+        return 0;
     }
 
     // main message loop
