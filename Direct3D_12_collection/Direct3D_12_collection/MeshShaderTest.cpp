@@ -37,18 +37,31 @@ static auto CreateMeshShaderBasicRootSignature(MeshShaderExecMode execMode, ID3D
     ID3DBlob* signature = nullptr;
     ID3DBlob* error = nullptr;
     HRESULT hRes = D3D12SerializeRootSignature(&rootSignatureDesc, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error);
-    if (FAILED(hRes))
+    do
     {
-        fprintf(stderr, "D3D12SerializeRootSignature failed: %ld\n", hRes);
-        return rootSignature;
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "D3D12SerializeRootSignature failed: %ld\n", hRes);
+            break;
+        }
+
+        hRes = d3d_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "CreateRootSignature failed: %ld\n", hRes);
+            break;
+        }
+    }
+    while (false);
+
+    if (signature != nullptr) {
+        signature->Release();
+    }
+    if (error != nullptr) {
+        error->Release();
     }
 
-    hRes = d3d_device->CreateRootSignature(0, signature->GetBufferPointer(), signature->GetBufferSize(), IID_PPV_ARGS(&rootSignature));
-    if (FAILED(hRes))
-    {
-        fprintf(stderr, "CreateRootSignature failed: %ld\n", hRes);
-        return rootSignature;
-    }
+    if (FAILED(hRes)) return nullptr;
 
     return rootSignature;
 }
