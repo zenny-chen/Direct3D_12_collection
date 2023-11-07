@@ -8,6 +8,7 @@ static auto CreateRootSignature(ID3D12Device* d3d_device) -> ID3D12RootSignature
     ID3D12RootSignature* rootSignature = nullptr;
 
     const D3D12_DESCRIPTOR_RANGE descRanges[]{
+        // b0
         {
             .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
             .NumDescriptors = 1,
@@ -15,10 +16,11 @@ static auto CreateRootSignature(ID3D12Device* d3d_device) -> ID3D12RootSignature
             .RegisterSpace = 0,
             .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
         },
+        // b1
         {
-            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
             .NumDescriptors = 1,
-            .BaseShaderRegister = 0,
+            .BaseShaderRegister = 1,
             .RegisterSpace = 0,
             .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
         }
@@ -26,7 +28,7 @@ static auto CreateRootSignature(ID3D12Device* d3d_device) -> ID3D12RootSignature
 
     const D3D12_ROOT_PARAMETER rootParameters[]{
         {
-            // constant buffer view (CBV)
+            // constant buffer view (CBV) for b0
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
             .DescriptorTable {
                 .NumDescriptorRanges = 1,
@@ -36,7 +38,7 @@ static auto CreateRootSignature(ID3D12Device* d3d_device) -> ID3D12RootSignature
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX
         },
         {
-            // unordered access buffer view (UAV)
+            // constant buffer view (CBV) for b1
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
             .DescriptorTable {
                 .NumDescriptorRanges = 1,
@@ -102,7 +104,7 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/tfb_basic.vert.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/vrs.vert.cso");
     D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
 
     do
@@ -209,7 +211,7 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
 
         const D3D12_DESCRIPTOR_HEAP_DESC cbv_uavHeapDesc{
             .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            .NumDescriptors = 2U,   // Transform Feedback Test needs 2 descriptors -- one for CBV and another for UAV
+            .NumDescriptors = 2U,   // Variable Rate Shading Test needs 2 descriptors -- both for CBVs
             .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
             .NodeMask = 0
         };
@@ -234,10 +236,10 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
     return result;
 }
 
-// return: std::make_tuple(uploadDevHostBuffer, readbackDevHostBuffer, vertexBuffer, uavBuffer, constantBuffer)
+// @return std::make_tuple(uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer)
 static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* rootSignature, ID3D12CommandQueue *commandQueue,
                                 ID3D12GraphicsCommandList* commandList, ID3D12GraphicsCommandList* commandBundleList, ID3D12DescriptorHeap *descriptorHeap) ->
-                                std::tuple<ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
+                                std::tuple<ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
 {
     const struct Vertex
     {
@@ -245,10 +247,10 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
         float color[4];
     } squareVertices[]{
         // Direct3D是以左手作为前面背面顶点排列的依据
-        {.position { -0.75f, 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },     // top left
-        {.position { 0.75f, 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.9f, 0.1f, 1.0f } },      // top right
-        {.position { -0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },    // bottom left
-        {.position { 0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }      // bottom right
+        {.position { -0.5f, 0.5f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },     // top left
+        {.position { 0.5f, 0.5f, 0.0f, 1.0f }, .color { 0.9f, 0.9f, 0.1f, 1.0f } },      // top right
+        {.position { -0.5f, -0.5f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },    // bottom left
+        {.position { 0.5f, -0.5f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }      // bottom right
     };
 
     const D3D12_HEAP_PROPERTIES defaultHeapProperties{
@@ -261,13 +263,6 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
 
     const D3D12_HEAP_PROPERTIES uploadHeapProperties{
         .Type = D3D12_HEAP_TYPE_UPLOAD,     // for host visible memory which is used to upload data from host to device
-        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
-        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
-        .CreationNodeMask = 1,
-        .VisibleNodeMask = 1
-    };
-    const D3D12_HEAP_PROPERTIES readbackHeapProperties{
-        .Type = D3D12_HEAP_TYPE_READBACK,   // for host visible memory which is used to read back data from device to host
         .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
         .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
         .CreationNodeMask = 1,
@@ -286,26 +281,13 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
         .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
         .Flags = D3D12_RESOURCE_FLAG_NONE
     };
-    const D3D12_RESOURCE_DESC uavResourceDesc{
-        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
-        .Alignment = 0,
-        .Width = sizeof(squareVertices),
-        .Height = 1U,
-        .DepthOrArraySize = 1,
-        .MipLevels = 1,
-        .Format = DXGI_FORMAT_UNKNOWN,
-        .SampleDesc {.Count = 1U, .Quality = 0 },
-        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-        .Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
-    };
 
     ID3D12Resource* uploadDevHostBuffer = nullptr;
-    ID3D12Resource* readbackDevHostBuffer = nullptr;
     ID3D12Resource* vertexBuffer = nullptr;
-    ID3D12Resource* uavBuffer = nullptr;
-    ID3D12Resource* constantBuffer = nullptr;
+    ID3D12Resource* offsetConstantBuffer = nullptr;
+    ID3D12Resource* rotateConstantBuffer = nullptr;
 
-    auto result = std::make_tuple(uploadDevHostBuffer, readbackDevHostBuffer, vertexBuffer, uavBuffer, constantBuffer);
+    auto result = std::make_tuple(uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer);
 
     // Create vertexBuffer on GPU side.
     HRESULT hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &vbResourceDesc,
@@ -316,30 +298,12 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
         return result;
     }
 
-    hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &uavResourceDesc,
-        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&uavBuffer));
-    if (FAILED(hRes))
-    {
-        fprintf(stderr, "CreateCommittedResource for unordered access view buffer failed: %ld\n", hRes);
-        return result;
-    }
-
     // Create uploadDevHostBuffer with host visible for upload
     hRes = d3d_device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &vbResourceDesc,
         D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&uploadDevHostBuffer));
     if (FAILED(hRes))
     {
         fprintf(stderr, "CreateCommittedResource for uploadDevHostBuffer failed: %ld\n", hRes);
-        return result;
-    }
-
-    D3D12_RESOURCE_DESC readbackResourceDesc = uavResourceDesc;
-    readbackResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;      // The only difference is the Flag value
-    hRes = d3d_device->CreateCommittedResource(&readbackHeapProperties, D3D12_HEAP_FLAG_NONE, &readbackResourceDesc,
-        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readbackDevHostBuffer));
-    if (FAILED(hRes))
-    {
-        fprintf(stderr, "CreateCommittedResource for readbackDevHostBuffer failed: %ld\n", hRes);
         return result;
     }
 
@@ -388,17 +352,26 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
             .Flags = D3D12_RESOURCE_FLAG_NONE
     };
 
-    // Create constant buffer object
+    // Create offset constant buffer object
     hRes = d3d_device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &cbResourceDesc,
-                                                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&constantBuffer));
+                                                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&offsetConstantBuffer));
     if (FAILED(hRes))
     {
-        fprintf(stderr, "CreateCommittedResource for constant buffer failed: %ld\n", hRes);
+        fprintf(stderr, "CreateCommittedResource for offset constant buffer failed: %ld\n", hRes);
+        return result;
+    }
+
+    // Create rotate constant buffer object
+    hRes = d3d_device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &cbResourceDesc,
+                                                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&rotateConstantBuffer));
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "CreateCommittedResource for rotate constant buffer failed: %ld\n", hRes);
         return result;
     }
 
     // Upload data to constant buffer
-    hRes = constantBuffer->Map(0, &readRange, &hostMemPtr);
+    hRes = offsetConstantBuffer->Map(0, &readRange, &hostMemPtr);
     if (FAILED(hRes))
     {
         fprintf(stderr, "Map constant buffer failed: %ld\n", hRes);
@@ -406,49 +379,60 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
     }
 
     memset(hostMemPtr, 0, CONSTANT_BUFFER_ALLOCATION_GRANULARITY);
-    constantBuffer->Unmap(0, nullptr);
+    float* pHostOffset = (float*)hostMemPtr;
+    pHostOffset[0] = -0.4f;
+    pHostOffset[1] = -0.4f;
+
+    offsetConstantBuffer->Unmap(0, nullptr);
+
+    hRes = rotateConstantBuffer->Map(0, &readRange, &hostMemPtr);
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "Map constant buffer failed: %ld\n", hRes);
+        return result;
+    }
+
+    memset(hostMemPtr, 0, CONSTANT_BUFFER_ALLOCATION_GRANULARITY);
+
+    rotateConstantBuffer->Unmap(0, nullptr);
 
     // Fetch CBV and UAV CPU descriptor handles
     auto const descHandleIncrSize = d3d_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    D3D12_CPU_DESCRIPTOR_HANDLE cbvCPUDescHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_CPU_DESCRIPTOR_HANDLE uavCPUDescHandle = cbvCPUDescHandle;
-    uavCPUDescHandle.ptr += 1U * descHandleIncrSize;
+    D3D12_CPU_DESCRIPTOR_HANDLE offsetCBVCPUDescHandle = descriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_CPU_DESCRIPTOR_HANDLE rotateCBVCPUDescHandle = offsetCBVCPUDescHandle;
+    rotateCBVCPUDescHandle.ptr += 1U * descHandleIncrSize;
 
     // Create the constant buffer view
-    const D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{
-        .BufferLocation = constantBuffer->GetGPUVirtualAddress(),
+    const D3D12_CONSTANT_BUFFER_VIEW_DESC offsetCBVDesc{
+        .BufferLocation = offsetConstantBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = CONSTANT_BUFFER_ALLOCATION_GRANULARITY
     };
-    d3d_device->CreateConstantBufferView(&cbvDesc, cbvCPUDescHandle);
+    d3d_device->CreateConstantBufferView(&offsetCBVDesc, offsetCBVCPUDescHandle);
 
-    // Create the unordered access buffer view
-    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
-        .Format = DXGI_FORMAT_UNKNOWN,
-        .ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
-        .Buffer {
-            .FirstElement = 0,
-            .NumElements = UINT(std::size(squareVertices)),
-            .StructureByteStride = sizeof(Vertex),
-            .CounterOffsetInBytes = 0,
-            .Flags = D3D12_BUFFER_UAV_FLAG_NONE
-        }
+    const D3D12_CONSTANT_BUFFER_VIEW_DESC rotateCBVDesc{
+        .BufferLocation = rotateConstantBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = CONSTANT_BUFFER_ALLOCATION_GRANULARITY
     };
-    d3d_device->CreateUnorderedAccessView(uavBuffer, nullptr, &uavDesc, uavCPUDescHandle);
+    d3d_device->CreateConstantBufferView(&rotateCBVDesc, rotateCBVCPUDescHandle);
 
     // Fetch CBV and UAV GPU descriptor handles
-    D3D12_GPU_DESCRIPTOR_HANDLE cbvDescHandle = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
-    D3D12_GPU_DESCRIPTOR_HANDLE uavDescHandle = cbvDescHandle;
-    uavDescHandle.ptr += 1U * descHandleIncrSize;
+    D3D12_GPU_DESCRIPTOR_HANDLE offsetCBVDescHandle = descriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE rotateCBVDescHandle = offsetCBVDescHandle;
+    rotateCBVDescHandle.ptr += 1U * descHandleIncrSize;
 
     // Record commands to the command list bundle.
     commandBundleList->SetGraphicsRootSignature(rootSignature);
     ID3D12DescriptorHeap* const descHeaps[]{ descriptorHeap };
     // ATTENTION: SetDescriptorHeaps should be set into command bundle list as well as command list
     commandBundleList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
-    commandBundleList->SetGraphicsRootDescriptorTable(0, cbvDescHandle);        // rootParameters[0]
-    commandBundleList->SetGraphicsRootDescriptorTable(1, uavDescHandle);        // rootParameters[1]
+    commandBundleList->SetGraphicsRootDescriptorTable(0, offsetCBVDescHandle);  // rootParameters[0]
+    commandBundleList->SetGraphicsRootDescriptorTable(1, rotateCBVDescHandle);  // rootParameters[1]
     commandBundleList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     commandBundleList->IASetVertexBuffers(0, 1, &vertexBufferView);
+
+    const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_MAX };
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
+
     commandBundleList->DrawInstanced((UINT)std::size(squareVertices), 1, 0, 0);
 
     // End of the record
@@ -464,12 +448,12 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
     // we just want to wait for setup to complete before continuing.
     WaitForPreviousFrame(commandQueue);
 
-    result = std::make_tuple(uploadDevHostBuffer, readbackDevHostBuffer, vertexBuffer, uavBuffer, constantBuffer);
+    result = std::make_tuple(uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer);
     return result;
 }
 
-auto CreateTransformFeedbackTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue *commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
-                                    std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
+auto CreateVariableRateShadingTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue *commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                    std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
 {
     ID3D12RootSignature* rootSignature = nullptr;
     ID3D12PipelineState* pipelineState = nullptr;
@@ -477,12 +461,11 @@ auto CreateTransformFeedbackTestAssets(ID3D12Device* d3d_device, ID3D12CommandQu
     ID3D12GraphicsCommandList* commandBundleList = nullptr;
     ID3D12DescriptorHeap* descriptorHeap = nullptr;
     ID3D12Resource* uploadDevHostBuffer = nullptr;
-    ID3D12Resource* readbackDevHostBuffer = nullptr;
     ID3D12Resource* vertexBuffer = nullptr;
-    ID3D12Resource* uavBuffer = nullptr;
-    ID3D12Resource* constantBuffer = nullptr;
+    ID3D12Resource* offsetConstantBuffer = nullptr;
+    ID3D12Resource* rotateConstantBuffer = nullptr;
 
-    auto result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, readbackDevHostBuffer, vertexBuffer, uavBuffer, constantBuffer);
+    auto result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer);
 
     rootSignature = CreateRootSignature(d3d_device);
     if (rootSignature == nullptr) return result;
@@ -496,28 +479,12 @@ auto CreateTransformFeedbackTestAssets(ID3D12Device* d3d_device, ID3D12CommandQu
 
     auto vertexBufferResult = CreateVertexBuffer(d3d_device, rootSignature, commandQueue, commandList, commandBundleList, descriptorHeap);
     uploadDevHostBuffer = std::get<0>(vertexBufferResult);
-    readbackDevHostBuffer = std::get<1>(vertexBufferResult);
-    vertexBuffer = std::get<2>(vertexBufferResult);
-    uavBuffer = std::get<3>(vertexBufferResult);
-    constantBuffer = std::get<4>(vertexBufferResult);
-    if (uploadDevHostBuffer == nullptr || readbackDevHostBuffer == nullptr || vertexBuffer == nullptr || uavBuffer == nullptr || constantBuffer == nullptr) return result;
+    vertexBuffer = std::get<1>(vertexBufferResult);
+    offsetConstantBuffer = std::get<2>(vertexBufferResult);
+    rotateConstantBuffer = std::get<3>(vertexBufferResult);
+    if (uploadDevHostBuffer == nullptr || vertexBuffer == nullptr || offsetConstantBuffer == nullptr || rotateConstantBuffer == nullptr) return result;
 
-    s_readbackBuffer = readbackDevHostBuffer;
-    result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, readbackDevHostBuffer, vertexBuffer, uavBuffer, constantBuffer);
+    result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer);
     return result;
-}
-
-auto RenderPostProcessForTransformFeedback() -> void
-{
-    float* hostMemPtr = nullptr;
-    const D3D12_RANGE readRange{ 0, 0 };
-    HRESULT hRes = s_readbackBuffer->Map(0, &readRange, (void**)&hostMemPtr);
-    if (FAILED(hRes))
-    {
-        fprintf(stderr, "Map read back buffer failed: %ld\n", hRes);
-        return;
-    }
-
-    s_readbackBuffer->Unmap(0, nullptr);
 }
 

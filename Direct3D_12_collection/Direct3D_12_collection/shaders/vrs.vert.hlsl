@@ -38,18 +38,26 @@ struct CBRotationAngle
     int paddings[256 - 4];
 };
 
-ConstantBuffer<CBRotationAngle> cbRotationAngle : register(b0);
-
-RWStructuredBuffer<PSInput> uavOutput : register(u0);
-
-PSInput VSMain(float4 position : POSITION, float4 color : COLOR, uint vertexID : SV_VertexID)
+struct CBTranslateOffset
 {
-    // glTranslate(0.0, 0.0, -2.3, 1.0)
+    float xOffset;
+    float yOffset;
+    int paddings[256 - 8];
+};
+
+ConstantBuffer<CBTranslateOffset> cbTranslateOffset : register(b0);
+ConstantBuffer<CBRotationAngle> cbRotationAngle : register(b1);
+
+// vertexIndex is a system-value input parameter and
+// shadingRate is a system-value output parameter
+PSInput VSMain(float4 position : POSITION, float4 color : COLOR, uint vertexIndex : SV_VertexID, out uint shadingRate : SV_ShadingRate)
+{
+    // glTranslate(xOffset, yOffset, -2.3, 1.0)
     const float4x4 translateMatrix = {
         1.0f, 0.0f, 0.0f, 0.0f,     // row 0
         0.0f, 1.0f, 0.0f, 0.0f,     // row 1
         0.0f, 0.0f, 1.0f, 0.0f,     // row 2
-        0.0f, 0.0f, -2.3f, 1.0f     // row 3
+        cbTranslateOffset.xOffset, cbTranslateOffset.yOffset, -2.3f, 1.0f     // row 3
     };
 
     const float rotRadian = radians(cbRotationAngle.rotAngle);
@@ -74,8 +82,27 @@ PSInput VSMain(float4 position : POSITION, float4 color : COLOR, uint vertexID :
     result.position = mul(position, mul(rotateMatrix, mul(translateMatrix, projectionMatrix)));
     result.color = color;
 
-    uavOutput[vertexID].position = result.position;
-    uavOutput[vertexID].color = color;
+    enum D3D12_SHADING_RATE
+    {
+        D3D12_SHADING_RATE_1X1 = 0,
+        D3D12_SHADING_RATE_1X2 = 0x1,
+        D3D12_SHADING_RATE_2X1 = 0x4,
+        D3D12_SHADING_RATE_2X2 = 0x5,
+        D3D12_SHADING_RATE_2X4 = 0x6,
+        D3D12_SHADING_RATE_4X2 = 0x9,
+        D3D12_SHADING_RATE_4X4 = 0xa
+    };
+
+    const D3D12_SHADING_RATE shadingRates[] = {
+        D3D12_SHADING_RATE_1X1,
+        D3D12_SHADING_RATE_1X2,
+        D3D12_SHADING_RATE_2X1,
+        D3D12_SHADING_RATE_2X2,
+        D3D12_SHADING_RATE_2X4,
+        D3D12_SHADING_RATE_4X2,
+        D3D12_SHADING_RATE_4X4
+    };
+    shadingRate = shadingRates[vertexIndex];
 
     return result;
 }
