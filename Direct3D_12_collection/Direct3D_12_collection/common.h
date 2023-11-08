@@ -1,5 +1,4 @@
-// Direct3D_12_collection.cpp : 此文件包含 "main" 函数。程序执行将在此处开始并结束。
-//
+#pragma once
 
 #include <cstdio>
 #include <cstdint>
@@ -18,6 +17,7 @@
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <d3dcompiler.h>
+
 
 struct alignas(sizeof(void*)) RootSignatureSubobject
 {

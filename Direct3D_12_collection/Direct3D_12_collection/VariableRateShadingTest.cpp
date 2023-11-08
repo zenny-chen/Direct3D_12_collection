@@ -1,7 +1,5 @@
 #include "common.h"
 
-// Only used in RenderPostProcessForTransformFeedback
-static ID3D12Resource* s_readbackBuffer = nullptr;
 
 static auto CreateRootSignature(ID3D12Device* d3d_device) -> ID3D12RootSignature*
 {
