@@ -59,6 +59,9 @@
     <FxCompile Include="shaders\vrs.vert.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
+    <FxCompile Include="shaders\vrs.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">

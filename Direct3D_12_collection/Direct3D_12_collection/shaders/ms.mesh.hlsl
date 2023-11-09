@@ -11,12 +11,17 @@ struct MyOutputVertex
     float4 color : COLOR;
 };
 
+struct MyOutputPrimitive
+{
+    uint shadingRate : SV_ShadingRate;
+};
+
 // max vertex count should not exceed 256
 // max primitive count should not exceed 256
 [outputtopology("triangle")]        // equivalent to [outputtopology("triangle_cw")]
 [numthreads(128, 1, 1)]
 void MeshMain(in uint globalTID : SV_DispatchThreadID, in uint3 groupID : SV_GroupID, in uint3 localTID : SV_GroupThreadID,
-            in payload MyPayloadType inPayload, out vertices MyOutputVertex outVertBuffer[256], out indices uint3 outPrimIndices[254])
+            in payload MyPayloadType inPayload, out vertices MyOutputVertex outVertBuffer[256], out indices uint3 outPrimIndices[254], out primitives MyOutputPrimitive outPrims[254])
 {
     // We're going to generate 256 vertices and 254 triangles (127 differential rectangles)
     SetMeshOutputCounts(256, 254);
@@ -83,5 +88,19 @@ void MeshMain(in uint globalTID : SV_DispatchThreadID, in uint3 groupID : SV_Gro
 
     outPrimIndices[localTID.x * 2 + 0U] = uint3(v0, v1, v2);
     outPrimIndices[localTID.x * 2 + 1U] = uint3(v2, v1, v3);
+
+    enum D3D12_SHADING_RATE
+    {
+        D3D12_SHADING_RATE_1X1 = 0,
+        D3D12_SHADING_RATE_1X2 = 0x1,
+        D3D12_SHADING_RATE_2X1 = 0x4,
+        D3D12_SHADING_RATE_2X2 = 0x5,
+        D3D12_SHADING_RATE_2X4 = 0x6,
+        D3D12_SHADING_RATE_4X2 = 0x9,
+        D3D12_SHADING_RATE_4X4 = 0xa
+    };
+    // Each vertex in a primitve should have the same shading rate size
+    outPrims[localTID.x * 2U + 0U].shadingRate = D3D12_SHADING_RATE_1X1;
+    outPrims[localTID.x * 2U + 1U].shadingRate = D3D12_SHADING_RATE_1X1;
 }
 

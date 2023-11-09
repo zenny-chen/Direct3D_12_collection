@@ -278,6 +278,9 @@ static auto PopulateMeshShaderCommandBundleList(MeshShaderExecMode execMode, ID3
     else {
         commandBundleList->DispatchMesh(1U, 1U, 1U);
     }
+
+    const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
     
     // End of the record
     hRes = commandBundleList->Close();

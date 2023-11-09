@@ -395,7 +395,7 @@ static auto QueryDeviceWaveOps() -> bool
 static auto QueryDeviceVariableShadingRatesSupport() -> bool
 {
     D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6{ };
-    auto const hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6, sizeof(options6));
+    auto hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &options6, sizeof(options6));
     if (FAILED(hRes))
     {
         fprintf(stderr, "CheckFeatureSupport for `D3D12_FEATURE_D3D12_OPTIONS6` failed: %ld\n", hRes);
@@ -409,6 +409,16 @@ static auto QueryDeviceVariableShadingRatesSupport() -> bool
     printf("Current device supports shading rate tier: %s\n", shadingRateTiers[options6.VariableShadingRateTier]);
     printf("Current device supports tile size of the screen-space image: %ux%u\n", options6.ShadingRateImageTileSize, options6.ShadingRateImageTileSize);
     printf("Current device supports background processing? %s\n", options6.BackgroundProcessingSupported ? "YES" : "NO");
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS10 options10{ };
+    hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS10, &options10, sizeof(options10));
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "CheckFeatureSupport for `D3D12_FEATURE_D3D12_OPTIONS10` failed: %ld\n", hRes);
+        return false;
+    }
+    printf("Current device supports SUM combiner? %s\n", options10.VariableRateShadingSumCombinerSupported ? "YES" : "NO");
+    printf("Current device supports SV_ShadingRate set from a mesh shader? %s\n", options10.MeshShaderPerPrimitiveShadingRateSupported ? "YES" : "NO");
 
     return true;
 }

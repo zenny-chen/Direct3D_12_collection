@@ -103,7 +103,7 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
     auto result = std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
 
     D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/vrs.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/vrs.frag.cso");
 
     do
     {
@@ -428,8 +428,8 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
     commandBundleList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     commandBundleList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
-    const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_MAX };
-    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
+    const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_SUM, D3D12_SHADING_RATE_COMBINER_MAX };
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X4, combiners);
 
     commandBundleList->DrawInstanced((UINT)std::size(squareVertices), 1, 0, 0);
 

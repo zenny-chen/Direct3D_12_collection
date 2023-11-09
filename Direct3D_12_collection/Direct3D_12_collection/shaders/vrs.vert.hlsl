@@ -102,7 +102,7 @@ PSInput VSMain(float4 position : POSITION, float4 color : COLOR, uint vertexInde
         D3D12_SHADING_RATE_4X2,
         D3D12_SHADING_RATE_4X4
     };
-    shadingRate = shadingRates[vertexIndex];
+    shadingRate = D3D12_SHADING_RATE_1X2;    // shadingRates[vertexIndex];
 
     return result;
 }
