@@ -39,7 +39,7 @@ enum D3D12_SHADING_RATE
     D3D12_SHADING_RATE_4X4	= 0xa
 };
 
-unsigned combiner(enum D3D12_SHADING_RATE a, enum D3D12_SHADING_RATE b)
+unsigned SUMcombiner(enum D3D12_SHADING_RATE a, enum D3D12_SHADING_RATE b)
 {
     unsigned c = a + b;
     if(c > D3D12_SHADING_RATE_4X4) {
