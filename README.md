@@ -27,7 +27,7 @@ A/B | 1x1 | 1x2 | 2x1 | 2x2 | 2x4 | 4x2 | 4x4
 
 ## Algorithm
 
-```csharp
+```cpp
 enum D3D12_SHADING_RATE
 {
     D3D12_SHADING_RATE_1X1	= 0,
