@@ -28,6 +28,15 @@ A/B | 1x1 | 1x2 | 2x1 | 2x2 | 2x4 | 4x2 | 4x4
 ## Algorithm
 
 ```cpp
+enum D3D12_AXIS_SHADING_RATE
+{
+    D3D12_AXIS_SHADING_RATE_1X = 0,
+    D3D12_AXIS_SHADING_RATE_2X = 0x1,
+    D3D12_AXIS_SHADING_RATE_4X = 0x2
+};
+
+// [3:2] -- D3D12_AXIS_SHADING_RATE for width
+// [1:0] -- D3D12_AXIS_SHADING_RATE for height
 enum D3D12_SHADING_RATE
 {
     D3D12_SHADING_RATE_1X1	= 0,
