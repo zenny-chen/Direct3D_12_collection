@@ -240,12 +240,22 @@ static auto QueryDeviceSupportedMaxFeatureLevel() -> bool
 static auto QueryDeviceShaderModel() -> bool
 {
     D3D12_FEATURE_DATA_SHADER_MODEL shaderModel { .HighestShaderModel = D3D_HIGHEST_SHADER_MODEL };
-    auto const hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel));
-    if (FAILED(hRes))
+    HRESULT hRes = S_OK;
+    do
     {
-        fprintf(stderr, "CheckFeatureSupport for `D3D12_FEATURE_SHADER_MODEL` failed: %ld\n", hRes);
-        return false;
+        hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel));
+
+        if (SUCCEEDED(hRes)) break;
+
+        if (shaderModel.HighestShaderModel == D3D_SHADER_MODEL_5_1)
+        {
+            fprintf(stderr, "The current device does not support at least shader model 5.1 which version is too low!\n");
+            return false;
+        }
+
+        shaderModel.HighestShaderModel = D3D_SHADER_MODEL(unsigned(shaderModel.HighestShaderModel) - 1U);
     }
+    while (true);
 
     s_highestShaderModel = shaderModel.HighestShaderModel;
 
