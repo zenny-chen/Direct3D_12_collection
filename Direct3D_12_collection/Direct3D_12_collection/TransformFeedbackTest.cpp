@@ -174,11 +174,11 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
             .NumRenderTargets = 1,
             .RTVFormats {
                 // RTVFormats[0]
-                { DXGI_FORMAT_R8G8B8A8_UNORM }
+                { RENDER_TARGET_BUFFER_FOMRAT }
             },
             .DSVFormat = DXGI_FORMAT_UNKNOWN,
             .SampleDesc {
-                .Count = 1,
+                .Count = USE_MSAA_RENDER_TARGET == 0 ? 1U : USE_MSAA_RENDER_TARGET,
                 .Quality = 0
             },
             .NodeMask = 0,

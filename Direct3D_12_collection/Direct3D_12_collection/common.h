@@ -19,6 +19,8 @@
 #include <d3dcompiler.h>
 
 
+#define USE_MSAA_RENDER_TARGET      4
+
 struct alignas(sizeof(void*)) RootSignatureSubobject
 {
     D3D12_PIPELINE_STATE_SUBOBJECT_TYPE rootSignatureSubType;
@@ -111,6 +113,9 @@ enum MeshShaderExecMode
 
 // Defined by the Direct3D 12 Spec
 static constexpr UINT CONSTANT_BUFFER_ALLOCATION_GRANULARITY = 256U;
+
+// Default swap-chain buffer and render target buffer format
+static constexpr DXGI_FORMAT RENDER_TARGET_BUFFER_FOMRAT = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 extern auto CreateCompiledShaderObjectFromPath(const char csoPath[]) -> D3D12_SHADER_BYTECODE;
 

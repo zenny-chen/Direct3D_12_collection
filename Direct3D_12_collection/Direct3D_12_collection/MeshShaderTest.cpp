@@ -182,7 +182,7 @@ static auto CreateMeshShaderBasicPipelineStateObject(MeshShaderExecMode execMode
             { D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS, {
                     .RTFormats {
                         // RTVFormats[0]
-                        { DXGI_FORMAT_R8G8B8A8_UNORM }
+                        { RENDER_TARGET_BUFFER_FOMRAT }
                     },
                     .NumRenderTargets = 1
                 }

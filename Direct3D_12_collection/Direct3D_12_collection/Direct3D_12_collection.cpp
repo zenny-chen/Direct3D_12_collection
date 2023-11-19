@@ -22,6 +22,7 @@ static ID3D12PipelineState* s_pipelineState = nullptr;
 static ID3D12GraphicsCommandList* s_commandList = nullptr;
 static ID3D12GraphicsCommandList* s_commandBundle = nullptr;
 static ID3D12Resource* s_renderTargets[TOTAL_FRAME_COUNT]{ };
+static ID3D12Resource* s_swapBackBuffers[TOTAL_FRAME_COUNT];
 // Host visible device buffer as an intermediate upload buffer
 static ID3D12Resource* s_devHostBuffer = nullptr;
 static ID3D12Resource* s_readbackHostBuffer = nullptr;
@@ -595,14 +596,14 @@ static auto CreateSwapChain(HWND hWnd) -> bool
     DXGI_SWAP_CHAIN_DESC swapChainDesc{
         .BufferDesc = {.Width = WINDOW_WIDTH, .Height = WINDOW_HEIGHT,
                         .RefreshRate = {.Numerator = 60, .Denominator = 1 },    // refresh rate of 60 FPS
-                        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+                        .Format = RENDER_TARGET_BUFFER_FOMRAT,
                         .ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, .Scaling = DXGI_MODE_SCALING_UNSPECIFIED },
         .SampleDesc = {.Count = 1, .Quality = 0 },
         .BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT,
         .BufferCount = TOTAL_FRAME_COUNT,
         .OutputWindow = hWnd,
         .Windowed = TRUE,
-        .SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
+        .SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD,    // Discard the contents of the back buffer, especially when MSAA is used.
         .Flags = 0
     };
 
@@ -639,21 +640,75 @@ static auto CreateRenderTargetViews() -> bool
 
     s_rtvDescriptorSize = s_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
+#if USE_MSAA_RENDER_TARGET
+
+    const D3D12_HEAP_PROPERTIES msaaDefaultHeapProperties{
+        .Type = D3D12_HEAP_TYPE_DEFAULT,
+        .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+        .MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN,
+        .CreationNodeMask = 1,
+        .VisibleNodeMask = 1
+    };
+
+    const D3D12_RESOURCE_DESC msaaRTResourceDesc{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment = 0,
+        .Width = WINDOW_WIDTH,
+        .Height = WINDOW_HEIGHT,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = RENDER_TARGET_BUFFER_FOMRAT,
+        .SampleDesc {.Count = USE_MSAA_RENDER_TARGET, .Quality = 0U },
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+    };
+
+    const D3D12_CLEAR_VALUE msaaOptClearValue{
+        .Format = RENDER_TARGET_BUFFER_FOMRAT,
+        .Color { 0.5f, 0.6f, 0.5f, 1.0f }
+    };
+
+    const D3D12_RENDER_TARGET_VIEW_DESC msaaRTVDesc{
+        .Format = RENDER_TARGET_BUFFER_FOMRAT,
+        .ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS,
+        .Texture2DMS { }
+    };
+
+#endif
+
     // Create frame resources
     D3D12_CPU_DESCRIPTOR_HANDLE rtvHandle = s_rtvDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-    D3D12_DESCRIPTOR_HEAP_DESC currDesc = s_rtvDescriptorHeap->GetDesc();
 
     // Create a RTV for each frame.
     for (UINT i = 0; i < TOTAL_FRAME_COUNT; ++i)
     {
+#if USE_MSAA_RENDER_TARGET
+        hRes = s_device->CreateCommittedResource(&msaaDefaultHeapProperties, D3D12_HEAP_FLAG_NONE, &msaaRTResourceDesc, D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
+                                                &msaaOptClearValue, IID_PPV_ARGS(&s_renderTargets[i]));
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "CreateCommittedResource for renderTarget[%u] failed: %ld!\n", i, hRes);
+            break;
+        }
+        s_device->CreateRenderTargetView(s_renderTargets[i], &msaaRTVDesc, rtvHandle);
+
+        hRes = s_swapChain->GetBuffer(i, IID_PPV_ARGS(&s_swapBackBuffers[i]));
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "GetBuffer for swap-chain back buffer [%u] failed: %ld\n", i, hRes);
+            return false;
+        }
+#else
         hRes = s_swapChain->GetBuffer(i, IID_PPV_ARGS(&s_renderTargets[i]));
         if (FAILED(hRes))
         {
-            fprintf(stderr, "GetBuffer for render target [%u] failed!\n", i);
+            fprintf(stderr, "GetBuffer for render target [%u] failed: %ld\n", i, hRes);
             return false;
         }
 
         s_device->CreateRenderTargetView(s_renderTargets[i], NULL, rtvHandle);
+#endif
+
         rtvHandle.ptr += s_rtvDescriptorSize;
     }
 
@@ -852,11 +907,11 @@ static auto CreateBasicPipelineStateObject() -> bool
             .NumRenderTargets = 1,
             .RTVFormats {
                 // RTVFormats[0]
-                { DXGI_FORMAT_R8G8B8A8_UNORM }
+                { RENDER_TARGET_BUFFER_FOMRAT }
             },
             .DSVFormat = DXGI_FORMAT_UNKNOWN,
             .SampleDesc {
-                .Count = 1,
+                .Count = USE_MSAA_RENDER_TARGET == 0 ? 1U : USE_MSAA_RENDER_TARGET,
                 .Quality = 0
             },
             .NodeMask = 0,
@@ -1097,7 +1152,7 @@ static auto PopulateCommandList() -> bool
         .Transition {
             .pResource = s_renderTargets[s_currFrameIndex],
             .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
+            .StateBefore = USE_MSAA_RENDER_TARGET == 0 ? D3D12_RESOURCE_STATE_PRESENT : D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
             .StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET
         }
     };
@@ -1153,6 +1208,47 @@ static auto PopulateCommandList() -> bool
     }
 
     // Indicate that the back buffer will now be used to present.
+#if USE_MSAA_RENDER_TARGET
+    const D3D12_RESOURCE_BARRIER resolveBarriers[2] {
+        {
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition {
+                .pResource = s_renderTargets[s_currFrameIndex],
+                .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+                .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_SOURCE
+            }
+        },
+        {
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition {
+                .pResource = s_swapBackBuffers[s_currFrameIndex],
+                .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                .StateBefore = D3D12_RESOURCE_STATE_PRESENT,
+                .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST
+            }
+        }
+    };
+    s_commandList->ResourceBarrier((UINT)std::size(resolveBarriers), resolveBarriers);
+
+    // Resolve MSAA render target to swap-chain back buffer
+    s_commandList->ResolveSubresource(s_swapBackBuffers[s_currFrameIndex], 0, s_renderTargets[s_currFrameIndex], 0, RENDER_TARGET_BUFFER_FOMRAT);
+
+    const D3D12_RESOURCE_BARRIER presentBarriers{
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition {
+            .pResource = s_swapBackBuffers[s_currFrameIndex],
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_RESOLVE_DEST,
+            .StateAfter = D3D12_RESOURCE_STATE_PRESENT
+        }
+    };
+    s_commandList->ResourceBarrier(1, &presentBarriers);
+
+#else
     const D3D12_RESOURCE_BARRIER presentBarrier {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -1164,6 +1260,8 @@ static auto PopulateCommandList() -> bool
         }
     };
     s_commandList->ResourceBarrier(1, &presentBarrier);
+
+#endif
 
     // End of the record
     hRes = s_commandList->Close();
@@ -1272,6 +1370,11 @@ static auto DestroyAllAssets() -> void
         {
             s_renderTargets[i]->Release();
             s_renderTargets[i] = nullptr;
+        }
+        if (s_swapBackBuffers[i] != nullptr)
+        {
+            s_swapBackBuffers[i]->Release();
+            s_swapBackBuffers[i] = nullptr;
         }
     }
     if (s_descriptorHeap != nullptr)
