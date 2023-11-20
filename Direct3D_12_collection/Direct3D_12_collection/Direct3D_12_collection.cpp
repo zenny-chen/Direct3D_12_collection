@@ -373,6 +373,18 @@ static auto QueryDeviceBasicFeatures() -> bool
 
     printf("Current device supports native 16-bit shader operations: %s\n", options4.Native16BitShaderOpsSupported ? "YES" : "NO");
 
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS multisampleQualityLevels{
+        .Format = RENDER_TARGET_BUFFER_FOMRAT,
+        .SampleCount = 64U,
+        .Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE,
+        .NumQualityLevels = 0U
+    };
+    while (hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &multisampleQualityLevels, sizeof(multisampleQualityLevels)),
+        FAILED(hRes) || multisampleQualityLevels.NumQualityLevels == 0U) {
+        multisampleQualityLevels.SampleCount /= 2;
+    }
+    printf("Current device support sample count for MSAA in DXGI_FORMAT_R8G8B8A8_UNORM format: %u\n", multisampleQualityLevels.SampleCount);
+
     return true;
 }
 
