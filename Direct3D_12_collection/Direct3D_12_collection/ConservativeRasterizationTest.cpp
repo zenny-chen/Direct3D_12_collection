@@ -1,8 +1,26 @@
 #include "common.h"
 
 
+#define TEST_UNCERTAINTY_REGION     1
+
 static constexpr D3D12_FILL_MODE USE_FILL_MODE = D3D12_FILL_MODE_SOLID;
 static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
+static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+// DO NOT configure this constant
+static constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY_TYPE = []() constexpr -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
+    switch (RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY)
+    {
+    case D3D_PRIMITIVE_TOPOLOGY_POINTLIST:
+        return D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+    case D3D_PRIMITIVE_TOPOLOGY_LINELIST:
+    case D3D_PRIMITIVE_TOPOLOGY_LINESTRIP:
+        return D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+    default:
+        return D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    }
+}();
+
 static constexpr UINT TEXTURE_SIZE = WINDOW_WIDTH / 8;
 static constexpr UINT TEXTURE_SAMPLE_COUNT = 1U;
 
@@ -238,7 +256,7 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
                 .NumElements = (UINT)std::size(inputElementDescs)
             },
             .IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
-            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+            .PrimitiveTopologyType = RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY_TYPE,
             .NumRenderTargets = 1,
             .RTVFormats {
                 // RTVFormats[0]
@@ -439,9 +457,16 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         float color[4];
     } triangleVertices[]{
         // Direct3D是以左手作为前面背面顶点排列的依据
+#if TEST_UNCERTAINTY_REGION
+        // Each pixel width is 1.0 / 32.0 because of projection transformation: (1.0 - (-1.0)) / 64.0
+        {.position { 0.0f / 32.0f + 1.0f / (256.0f * 32.0f), 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },  // top
+        {.position { 0.75f, 0.0f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },                                    // right
+        {.position { 0.0f / 32.0f + 1.0f / (256.0f * 32.0f), -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }  // bottom
+#else
         {.position { 0.0f, 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },    // top center
         {.position { 0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },  // bottom right
         {.position { -0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }  // bottom left
+#endif
     };
 
     const D3D12_HEAP_PROPERTIES defaultHeapProperties{
@@ -532,7 +557,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
     // Record commands to the command list bundle.
     commandBundleList->SetGraphicsRootSignature(rootSignature);
-    commandBundleList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    commandBundleList->IASetPrimitiveTopology(RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY);
     commandBundleList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };

@@ -112,10 +112,10 @@ enum MeshShaderExecMode
 };
 
 // Window Width
-static constexpr int WINDOW_WIDTH = 768;
+static constexpr int WINDOW_WIDTH = 512;
 
 // Window Height
-static constexpr int WINDOW_HEIGHT = 768;
+static constexpr int WINDOW_HEIGHT = 512;
 
 // Defined by the Direct3D 12 Spec
 static constexpr UINT CONSTANT_BUFFER_ALLOCATION_GRANULARITY = 256U;
