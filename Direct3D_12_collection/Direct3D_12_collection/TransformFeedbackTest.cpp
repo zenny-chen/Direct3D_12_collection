@@ -150,7 +150,7 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
                 .DepthBiasClamp = 0.0f,
                 .SlopeScaledDepthBias = 0.0f,
                 .DepthClipEnable = TRUE,
-                .MultisampleEnable = FALSE,
+                .MultisampleEnable = USE_MSAA_RENDER_TARGET != 0,
                 .AntialiasedLineEnable = FALSE,
                 .ForcedSampleCount = 0,
                 .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF

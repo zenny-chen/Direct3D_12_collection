@@ -19,7 +19,7 @@
 #include <d3dcompiler.h>
 
 
-#define USE_MSAA_RENDER_TARGET      4
+#define USE_MSAA_RENDER_TARGET      0
 
 struct alignas(sizeof(void*)) RootSignatureSubobject
 {
@@ -111,6 +111,12 @@ enum MeshShaderExecMode
     ONLY_MESH_SHADER_MODE
 };
 
+// Window Width
+static constexpr int WINDOW_WIDTH = 768;
+
+// Window Height
+static constexpr int WINDOW_HEIGHT = 768;
+
 // Defined by the Direct3D 12 Spec
 static constexpr UINT CONSTANT_BUFFER_ALLOCATION_GRANULARITY = 256U;
 
@@ -121,6 +127,8 @@ extern auto CreateCompiledShaderObjectFromPath(const char csoPath[]) -> D3D12_SH
 
 // Used to sync commandQueue->ExecuteCommandLists 
 extern auto WaitForPreviousFrame(ID3D12CommandQueue* commandQueue) -> bool;
+
+extern auto ResetCommandAllocatorAndList(ID3D12CommandAllocator* commandAllocator, ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pipelineState) -> bool;
 
 extern auto WriteToDeviceResourceAndSync(
     _In_ ID3D12GraphicsCommandList* pCmdList,
@@ -148,5 +156,8 @@ extern auto CreateMeshShaderNoRasterTestAssets(ID3D12Device* d3d_device, ID3D12C
                                         std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12Resource*, ID3D12Resource*, ID3D12DescriptorHeap*>;
 
 extern auto CreateVariableRateShadingTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
-                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>;
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>;
+
+extern auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>;
 

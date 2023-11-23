@@ -33,6 +33,9 @@
     <ClCompile Include="VariableRateShadingTest.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="ConservativeRasterizationTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\basic.frag.hlsl">
@@ -60,6 +63,18 @@
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\vrs.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\cr.vert.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\cr.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\cr_present.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\cr_present.vert.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
   </ItemGroup>

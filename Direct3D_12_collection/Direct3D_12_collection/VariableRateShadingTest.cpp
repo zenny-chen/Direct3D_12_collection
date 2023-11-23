@@ -150,7 +150,7 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
                 .DepthBiasClamp = 0.0f,
                 .SlopeScaledDepthBias = 0.0f,
                 .DepthClipEnable = TRUE,
-                .MultisampleEnable = FALSE,
+                .MultisampleEnable = USE_MSAA_RENDER_TARGET != 0,
                 .AntialiasedLineEnable = FALSE,
                 .ForcedSampleCount = 0,
                 .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
@@ -451,7 +451,7 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
 }
 
 auto CreateVariableRateShadingTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue *commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
-                                    std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
+                                    std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>
 {
     ID3D12RootSignature* rootSignature = nullptr;
     ID3D12PipelineState* pipelineState = nullptr;
@@ -462,27 +462,35 @@ auto CreateVariableRateShadingTestAssets(ID3D12Device* d3d_device, ID3D12Command
     ID3D12Resource* vertexBuffer = nullptr;
     ID3D12Resource* offsetConstantBuffer = nullptr;
     ID3D12Resource* rotateConstantBuffer = nullptr;
+    bool success = false;
 
-    auto result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer);
+    auto const result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer, success);
+
+    success = true;
 
     rootSignature = CreateRootSignature(d3d_device);
-    if (rootSignature == nullptr) return result;
+    if (rootSignature == nullptr) {
+        success = false;
+    }
 
     auto pipelineResult = CreatePipelineStateObject(d3d_device, commandAllocator, commandBundleAllocator, rootSignature);
     pipelineState = std::get<0>(pipelineResult);
     commandList = std::get<1>(pipelineResult);
     commandBundleList = std::get<2>(pipelineResult);
     descriptorHeap = std::get<3>(pipelineResult);
-    if (pipelineState == nullptr || commandList == nullptr || commandBundleList == nullptr || descriptorHeap == nullptr) return result;
+    if (pipelineState == nullptr || commandList == nullptr || commandBundleList == nullptr || descriptorHeap == nullptr) {
+        success = false;
+    }
 
     auto vertexBufferResult = CreateVertexBuffer(d3d_device, rootSignature, commandQueue, commandList, commandBundleList, descriptorHeap);
     uploadDevHostBuffer = std::get<0>(vertexBufferResult);
     vertexBuffer = std::get<1>(vertexBufferResult);
     offsetConstantBuffer = std::get<2>(vertexBufferResult);
     rotateConstantBuffer = std::get<3>(vertexBufferResult);
-    if (uploadDevHostBuffer == nullptr || vertexBuffer == nullptr || offsetConstantBuffer == nullptr || rotateConstantBuffer == nullptr) return result;
+    if (uploadDevHostBuffer == nullptr || vertexBuffer == nullptr || offsetConstantBuffer == nullptr || rotateConstantBuffer == nullptr) {
+        success = false;
+    }
 
-    result = std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer);
-    return result;
+    return std::make_tuple(rootSignature, pipelineState, commandList, commandBundleList, descriptorHeap, uploadDevHostBuffer, vertexBuffer, offsetConstantBuffer, rotateConstantBuffer, success);
 }
 

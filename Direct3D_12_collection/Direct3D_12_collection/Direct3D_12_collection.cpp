@@ -2,11 +2,10 @@
 //
 
 #include "common.h"
+#include <ntddkbd.h>
 
 static constexpr UINT MAX_HARDWARE_ADAPTER_COUNT = 16;
 static constexpr UINT TOTAL_FRAME_COUNT = 5;
-static constexpr int WINDOW_WIDTH = 640;
-static constexpr int WINDOW_HEIGHT = 640;
 
 static IDXGIFactory4* s_factory = nullptr;
 static ID3D12Device* s_device = nullptr;
@@ -15,6 +14,7 @@ static ID3D12CommandAllocator* s_commandAllocator = nullptr;
 static ID3D12CommandAllocator* s_commandBundleAllocator = nullptr;
 static IDXGISwapChain3* s_swapChain = nullptr;
 static ID3D12DescriptorHeap* s_rtvDescriptorHeap = nullptr;
+static ID3D12DescriptorHeap* s_rtvTextureDescriptorHeap = nullptr;
 static UINT s_rtvDescriptorSize = 0;
 static ID3D12DescriptorHeap* s_descriptorHeap = nullptr;
 static ID3D12RootSignature* s_rootSignature = nullptr;
@@ -30,6 +30,7 @@ static ID3D12Resource* s_vertexBuffer = nullptr;
 static ID3D12Resource* s_constantBuffer = nullptr;
 static ID3D12Resource* s_offsetConstantBuffer = nullptr;
 static ID3D12Resource* s_uavBuffer = nullptr;
+static ID3D12Resource* s_rtTexture = nullptr;
 
 static bool s_needRotate = true;
 static auto (*s_renderPostProcessFunc)() -> void = nullptr;
@@ -47,6 +48,7 @@ static UINT s_waveSize = 0;
 static UINT s_maxSIMDSize = 0;
 static bool s_supportMeshShader = false;
 
+static bool s_isWindows11OrAbove = false;
 static POINT s_wndMinsize{ };       // minimum window size
 static const char s_appName[] = "Direct3D 12 Collections";
 static float s_rotateAngle = 0.0f;
@@ -437,9 +439,14 @@ static auto QueryDeviceVariableShadingRatesSupport() -> bool
     hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS10, &options10, sizeof(options10));
     if (FAILED(hRes))
     {
-        fprintf(stderr, "CheckFeatureSupport for `D3D12_FEATURE_D3D12_OPTIONS10` failed: %ld\n", hRes);
-        return false;
+        s_isWindows11OrAbove = false;
+        puts("WARNING: Current platform is not Windows 11 or above, so `D3D12_FEATURE_D3D12_OPTIONS10` cannot be checked!");
+        
+        return true;
     }
+
+    s_isWindows11OrAbove = true;
+
     printf("Current device supports SUM combiner? %s\n", options10.VariableRateShadingSumCombinerSupported ? "YES" : "NO");
     printf("Current device supports SV_ShadingRate set from a mesh shader? %s\n", options10.MeshShaderPerPrimitiveShadingRateSupported ? "YES" : "NO");
 
@@ -458,6 +465,12 @@ static auto QueryDeviceMeshShaderSupport() -> bool
 
     s_supportMeshShader = options7.MeshShaderTier != D3D12_MESH_SHADER_TIER_NOT_SUPPORTED;
     printf("Current device supports Mesh Shader: %s\n", s_supportMeshShader ? "YES" : "NO");
+
+    if (!s_isWindows11OrAbove)
+    {
+        puts("WARNING: Current platform is not Windows 11 or above, so `D3D12_FEATURE_DATA_D3D12_OPTIONS9` cannot be checked!");
+        return true;
+    }
 
     D3D12_FEATURE_DATA_D3D12_OPTIONS9 options9{ };
     hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS9, &options9, sizeof(options9));
@@ -895,7 +908,7 @@ static auto CreateBasicPipelineStateObject() -> bool
                 .DepthBiasClamp = 0.0f,
                 .SlopeScaledDepthBias = 0.0f,
                 .DepthClipEnable = TRUE,
-                .MultisampleEnable = FALSE,
+                .MultisampleEnable = USE_MSAA_RENDER_TARGET != 0,
                 .AntialiasedLineEnable = FALSE,
                 .ForcedSampleCount = 0,
                 .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
@@ -1121,22 +1134,27 @@ static auto CreateBasicVertexBuffer() -> bool
     return true;
 }
 
-static auto PopulateCommandList() -> bool
+auto ResetCommandAllocatorAndList(ID3D12CommandAllocator *commandAllocator, ID3D12GraphicsCommandList *commandList, ID3D12PipelineState *pipelineState) -> bool
 {
-    HRESULT hRes = s_commandAllocator->Reset();
+    HRESULT hRes = commandAllocator->Reset();
     if (FAILED(hRes))
     {
         fprintf(stderr, "Reset command allocator failed: %ld\n", hRes);
         return false;
     }
 
-    hRes = s_commandList->Reset(s_commandAllocator, s_pipelineState);
+    hRes = commandList->Reset(commandAllocator, pipelineState);
     if (FAILED(hRes))
     {
         fprintf(stderr, "Reset basic command list failed: %ld\n", hRes);
         return false;
     }
 
+    return true;
+}
+
+static auto PopulateCommandList() -> bool
+{
     // Record commands to the command list
     // Set necessary state.
     const D3D12_VIEWPORT viewPort{
@@ -1183,6 +1201,8 @@ static auto PopulateCommandList() -> bool
         ID3D12DescriptorHeap* const descHeaps[]{ s_descriptorHeap };
         s_commandList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
     }
+
+    HRESULT hRes = S_OK;
 
     // Update the constant buffer content
     if (s_needRotate && s_constantBuffer != nullptr)
@@ -1279,7 +1299,7 @@ static auto PopulateCommandList() -> bool
     hRes = s_commandList->Close();
     if (FAILED(hRes))
     {
-        fprintf(stderr, "Close basic command list failed: %ld\n", hRes);
+        fprintf(stderr, "Close command list in populate commands failed: %ld\n", hRes);
         return false;
     }
 
@@ -1289,6 +1309,8 @@ static auto PopulateCommandList() -> bool
 static auto Render() -> bool
 {
     if (s_commandList == nullptr) return false;
+
+    if (!ResetCommandAllocatorAndList(s_commandAllocator, s_commandList, s_pipelineState)) return false;
 
     if (!PopulateCommandList()) return false;
 
@@ -1325,6 +1347,11 @@ static auto DestroyAllAssets() -> void
     {
         s_fence->Release();
         s_fence = nullptr;
+    }
+    if (s_rtTexture != nullptr)
+    {
+        s_rtTexture->Release();
+        s_rtTexture = nullptr;
     }
     if (s_constantBuffer != nullptr)
     {
@@ -1393,6 +1420,11 @@ static auto DestroyAllAssets() -> void
     {
         s_descriptorHeap->Release();
         s_descriptorHeap = nullptr;
+    }
+    if (s_rtvTextureDescriptorHeap != nullptr)
+    {
+        s_rtvTextureDescriptorHeap->Release();
+        s_rtvTextureDescriptorHeap = nullptr;
     }
     if (s_rtvDescriptorHeap != nullptr)
     {
@@ -1565,15 +1597,19 @@ auto main(int argc, const char* argv[]) -> int
     puts("[0]: Basic Rendering");
     puts("[1]: Transform Feedback");
     puts("[2]: Variable-Rate Shading (VRS)");
+    puts("[3]: Conservative Rasterization (CR)");
 
-    long totalItemCount = 3;
+    constexpr long optionalItemsBegin = 4L;
+    constexpr long optionalItemCount = 3L;
+
+    long totalItemCount = optionalItemsBegin;
     if (s_supportMeshShader)
     {
-        puts("[3]: Basic Mesh Shader Rendering");
-        puts("[4]: Only Mesh Shader Rendering");
-        puts("[5]: Mesh Shader Without Rasterization Rendering");
+        puts("[4]: Basic Mesh Shader Rendering");
+        puts("[5]: Only Mesh Shader Rendering");
+        puts("[6]: Mesh Shader Without Rasterization Rendering");
 
-        totalItemCount += 3;
+        totalItemCount += optionalItemCount;
     }
 
     char cmdBuf[256]{ };
@@ -1605,12 +1641,14 @@ auto main(int argc, const char* argv[]) -> int
 
         if (selectedRenderModeIndex == 0)
         {
+            // Basic
             if (!CreateBasicRootSignature()) break;
             if (!CreateBasicPipelineStateObject()) break;
             if (!CreateBasicVertexBuffer()) break;
         }
         else if (selectedRenderModeIndex == 1)
         {
+            // Transform Feedback
             auto externalAssets = CreateTransformFeedbackTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
 
             s_rootSignature = std::get<0>(externalAssets);
@@ -1642,19 +1680,12 @@ auto main(int argc, const char* argv[]) -> int
         }
         else if (selectedRenderModeIndex == 2)
         {
+            // Variable-rate Shading
             auto externalAssets = CreateVariableRateShadingTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
-
             s_rootSignature = std::get<0>(externalAssets);
-            if (s_rootSignature == nullptr) break;
-
             s_pipelineState = std::get<1>(externalAssets);
-            if (s_pipelineState == nullptr) break;
-
             s_commandList = std::get<2>(externalAssets);
-            if (s_commandList == nullptr) break;
-
             s_commandBundle = std::get<3>(externalAssets);
-            if (s_commandBundle == nullptr) break;
 
             if (s_descriptorHeap != nullptr)
             {
@@ -1667,11 +1698,39 @@ auto main(int argc, const char* argv[]) -> int
             s_offsetConstantBuffer = std::get<7>(externalAssets);
             s_constantBuffer = std::get<8>(externalAssets);
 
+            if (!std::get<9>(externalAssets)) break;
+
             s_needSetDescriptorHeapInDirectCommandList = true;
         }
-        else if(selectedRenderModeIndex < 5)
+        else if (selectedRenderModeIndex == 3)
         {
-            auto const execMode = MeshShaderExecMode(selectedRenderModeIndex - 3);
+            // Conservative Rasterization
+            auto externalAssets = CreateConservativeRasterizationTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+            s_rootSignature = std::get<0>(externalAssets);
+            s_pipelineState = std::get<1>(externalAssets);
+            s_commandList = std::get<2>(externalAssets);
+            s_commandBundle = std::get<3>(externalAssets);
+            s_rtvTextureDescriptorHeap = std::get<4>(externalAssets);
+
+            if (s_descriptorHeap != nullptr)
+            {
+                s_descriptorHeap->Release();
+                s_descriptorHeap = nullptr;
+            }
+            s_descriptorHeap = std::get<5>(externalAssets);
+
+            s_devHostBuffer = std::get<6>(externalAssets);
+            s_vertexBuffer = std::get<7>(externalAssets);
+            s_rtTexture = std::get<8>(externalAssets);
+            
+            if (!std::get<9>(externalAssets)) break;
+
+            s_needSetDescriptorHeapInDirectCommandList = true;
+        }
+        else if(selectedRenderModeIndex < totalItemCount - 1)
+        {
+            // Basic Mesh Shader & Only Mesh Shader
+            auto const execMode = MeshShaderExecMode(selectedRenderModeIndex - optionalItemsBegin);
             auto externalAssets = CreateMeshShaderTestAssets(execMode, s_device, s_commandAllocator, s_commandBundleAllocator);
 
             s_rootSignature = std::get<0>(externalAssets);
@@ -1686,8 +1745,9 @@ auto main(int argc, const char* argv[]) -> int
             s_commandBundle = std::get<3>(externalAssets);
             if (s_commandBundle == nullptr) break;
         }
-        else if (selectedRenderModeIndex == 5)
+        else if (selectedRenderModeIndex == totalItemCount - 1)
         {
+            // Mesh Shader Without Rasterization Rendering
             auto externalAssets = CreateMeshShaderNoRasterTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
 
             s_rootSignature = std::get<0>(externalAssets);
