@@ -36,6 +36,9 @@
     <ClCompile Include="ConservativeRasterizationTest.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="TextureBasicTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\basic.frag.hlsl">
@@ -75,6 +78,12 @@
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\cr_present.vert.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\basic_texture.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\basic_texture.vert.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
   </ItemGroup>

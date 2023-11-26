@@ -17,6 +17,7 @@ static ID3D12DescriptorHeap* s_rtvDescriptorHeap = nullptr;
 static ID3D12DescriptorHeap* s_rtvTextureDescriptorHeap = nullptr;
 static UINT s_rtvDescriptorSize = 0;
 static ID3D12DescriptorHeap* s_descriptorHeap = nullptr;
+static ID3D12DescriptorHeap* s_samplerDescriptorHeap = nullptr;
 static ID3D12RootSignature* s_rootSignature = nullptr;
 static ID3D12PipelineState* s_pipelineState = nullptr;
 static ID3D12GraphicsCommandList* s_commandList = nullptr;
@@ -31,6 +32,7 @@ static ID3D12Resource* s_constantBuffer = nullptr;
 static ID3D12Resource* s_offsetConstantBuffer = nullptr;
 static ID3D12Resource* s_uavBuffer = nullptr;
 static ID3D12Resource* s_rtTexture = nullptr;
+static ID3D12Resource* s_texture = nullptr;
 
 static bool s_needRotate = true;
 static auto (*s_renderPostProcessFunc)() -> void = nullptr;
@@ -75,6 +77,68 @@ auto WriteToDeviceResourceAndSync(
 
     pCmdList->CopyBufferRegion(pDestinationResource, UINT64(dstOffset), pIntermediate, UINT64(srcOffset), dataSize);
     
+    const D3D12_RESOURCE_BARRIER endCopyBarrier = {
+        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        .Transition {
+            .pResource = pDestinationResource,
+            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+            .StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ
+        }
+    };
+    pCmdList->ResourceBarrier(1, &endCopyBarrier);
+}
+
+auto WriteToDeviceTextureAndSync(
+    _In_ ID3D12GraphicsCommandList* pCmdList,
+    _In_ ID3D12Resource* pDestinationResource,
+    _In_ ID3D12Resource* pIntermediate,
+    UINT dstX,
+    UINT dstY,
+    UINT dstZ,
+    size_t srcOffset,
+    DXGI_FORMAT textureFormat,
+    UINT width,
+    UINT height,
+    UINT depth,
+    UINT rowPitch) -> void
+{
+    const D3D12_RESOURCE_BARRIER beginCopyBarrier = {
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition {
+                .pResource = pDestinationResource,
+                .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                .StateBefore = D3D12_RESOURCE_STATE_COMMON,
+                .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST
+            }
+    };
+    pCmdList->ResourceBarrier(1, &beginCopyBarrier);
+
+    const D3D12_TEXTURE_COPY_LOCATION dstLocation{
+        .pResource = pDestinationResource,
+        .Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+        .SubresourceIndex = 0
+    };
+
+    const D3D12_TEXTURE_COPY_LOCATION srcLocation{
+        .pResource = pIntermediate,
+        .Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+        .PlacedFootprint {
+            .Offset = srcOffset,
+            .Footprint {
+                .Format = textureFormat,
+                .Width = width,
+                .Height = height,
+                .Depth = depth,
+                .RowPitch = rowPitch
+            }
+        }
+    };
+
+    pCmdList->CopyTextureRegion(&dstLocation, dstX, dstY, dstZ, &srcLocation, nullptr);
+
     const D3D12_RESOURCE_BARRIER endCopyBarrier = {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
         .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
@@ -1198,8 +1262,8 @@ static auto PopulateCommandList() -> bool
     if (s_needSetDescriptorHeapInDirectCommandList)
     {
         // If command bundle list has recorded the SetDescriptorHeaps, the corresponding command list MUST also record this SetDescriptorHeaps.
-        ID3D12DescriptorHeap* const descHeaps[]{ s_descriptorHeap };
-        s_commandList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
+        ID3D12DescriptorHeap* const descHeaps[]{ s_descriptorHeap, s_samplerDescriptorHeap };
+        s_commandList->SetDescriptorHeaps(s_samplerDescriptorHeap == nullptr ? 1U : 2U, descHeaps);
     }
 
     HRESULT hRes = S_OK;
@@ -1353,6 +1417,11 @@ static auto DestroyAllAssets() -> void
         s_rtTexture->Release();
         s_rtTexture = nullptr;
     }
+    if (s_texture != nullptr)
+    {
+        s_texture->Release();
+        s_texture = nullptr;
+    }
     if (s_constantBuffer != nullptr)
     {
         s_constantBuffer->Release();
@@ -1420,6 +1489,11 @@ static auto DestroyAllAssets() -> void
     {
         s_descriptorHeap->Release();
         s_descriptorHeap = nullptr;
+    }
+    if (s_samplerDescriptorHeap != nullptr)
+    {
+        s_samplerDescriptorHeap->Release();
+        s_samplerDescriptorHeap = nullptr;
     }
     if (s_rtvTextureDescriptorHeap != nullptr)
     {
@@ -1595,21 +1669,20 @@ auto main(int argc, const char* argv[]) -> int
 
     puts("\n================================\n\nPlease choose which mode to render:");
     puts("[0]: Basic Rendering");
-    puts("[1]: Transform Feedback");
-    puts("[2]: Variable-Rate Shading (VRS)");
-    puts("[3]: Conservative Rasterization (CR)");
+    puts("[1]: Basic Texturing");
+    puts("[2]: Transform Feedback");
+    puts("[3]: Variable-Rate Shading (VRS)");
+    puts("[4]: Conservative Rasterization (CR)");
 
-    constexpr long optionalItemsBegin = 4L;
+    constexpr long optionalItemsBegin = 5L;
     constexpr long optionalItemCount = 3L;
-
-    long totalItemCount = optionalItemsBegin;
+    constexpr long totalItemCount = optionalItemsBegin + optionalItemCount;
+    
     if (s_supportMeshShader)
     {
-        puts("[4]: Basic Mesh Shader Rendering");
-        puts("[5]: Only Mesh Shader Rendering");
-        puts("[6]: Mesh Shader Without Rasterization Rendering");
-
-        totalItemCount += optionalItemCount;
+        puts("[5]: Basic Mesh Shader Rendering");
+        puts("[6]: Only Mesh Shader Rendering");
+        puts("[7]: Mesh Shader Without Rasterization Rendering");
     }
 
     char cmdBuf[256]{ };
@@ -1641,12 +1714,37 @@ auto main(int argc, const char* argv[]) -> int
 
         if (selectedRenderModeIndex == 0)
         {
-            // Basic
+            // Basic Rendering
             if (!CreateBasicRootSignature()) break;
             if (!CreateBasicPipelineStateObject()) break;
             if (!CreateBasicVertexBuffer()) break;
         }
         else if (selectedRenderModeIndex == 1)
+        {
+            // Basic Texturing
+            auto externalAssets = CreateTextureBasicTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+            s_rootSignature = std::get<0>(externalAssets);
+            s_pipelineState = std::get<1>(externalAssets);
+            s_commandList = std::get<2>(externalAssets);
+            s_commandBundle = std::get<3>(externalAssets);
+
+            if (s_descriptorHeap != nullptr)
+            {
+                s_descriptorHeap->Release();
+                s_descriptorHeap = nullptr;
+            }
+            s_descriptorHeap = std::get<4>(externalAssets);
+            s_samplerDescriptorHeap = std::get<5>(externalAssets);
+            s_devHostBuffer = std::get<6>(externalAssets);
+            s_vertexBuffer = std::get<7>(externalAssets);
+            s_texture = std::get<8>(externalAssets);
+            s_constantBuffer = std::get<9>(externalAssets);
+
+            if (!std::get<10>(externalAssets)) break;
+
+            s_needSetDescriptorHeapInDirectCommandList = true;
+        }
+        else if (selectedRenderModeIndex == 2)
         {
             // Transform Feedback
             auto externalAssets = CreateTransformFeedbackTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
@@ -1678,7 +1776,7 @@ auto main(int argc, const char* argv[]) -> int
             s_needSetDescriptorHeapInDirectCommandList = true;
             s_renderPostProcessFunc = RenderPostProcessForTransformFeedback;
         }
-        else if (selectedRenderModeIndex == 2)
+        else if (selectedRenderModeIndex == 3)
         {
             // Variable-rate Shading
             auto externalAssets = CreateVariableRateShadingTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
@@ -1702,7 +1800,7 @@ auto main(int argc, const char* argv[]) -> int
 
             s_needSetDescriptorHeapInDirectCommandList = true;
         }
-        else if (selectedRenderModeIndex == 3)
+        else if (selectedRenderModeIndex == 4)
         {
             // Conservative Rasterization
             auto externalAssets = CreateConservativeRasterizationTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);

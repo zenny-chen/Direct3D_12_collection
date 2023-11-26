@@ -138,11 +138,28 @@ extern auto WriteToDeviceResourceAndSync(
     size_t srcOffset,
     size_t dataSize) -> void;
 
+extern auto WriteToDeviceTextureAndSync(
+    _In_ ID3D12GraphicsCommandList* pCmdList,
+    _In_ ID3D12Resource* pDestinationResource,
+    _In_ ID3D12Resource* pIntermediate,
+    UINT dstX,
+    UINT dstY,
+    UINT dstZ,
+    size_t srcOffset,
+    DXGI_FORMAT textureFormat,
+    UINT width,
+    UINT height,
+    UINT depth,
+    UINT rowPitch) -> void;
+
 extern auto SyncAndReadFromDeviceResource(
     _In_ ID3D12GraphicsCommandList* pCmdList,
     size_t dataSize,
     _In_ ID3D12Resource* pDestinationHostBuffer,
     _In_ ID3D12Resource* pSourceUAVBuffer) -> void;
+
+extern auto CreateTextureBasicTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>;
 
 extern auto CreateTransformFeedbackTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
                                         std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>;

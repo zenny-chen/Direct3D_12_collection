@@ -1,11 +1,11 @@
 #include "common.h"
 
 
-#define TEST_UNCERTAINTY_REGION     1
+#define TEST_UNCERTAINTY_REGION     0
 
 static constexpr D3D12_FILL_MODE USE_FILL_MODE = D3D12_FILL_MODE_SOLID;
-static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
-static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 
 // DO NOT configure this constant
 static constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY_TYPE = []() constexpr -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
@@ -211,22 +211,22 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
                 .AlphaToCoverageEnable = FALSE,
                 .IndependentBlendEnable = FALSE,
                 .RenderTarget {
-                    // RenderTarget[0]
-                    {
-                        .BlendEnable = FALSE,
-                        .LogicOpEnable = FALSE,
-                        .SrcBlend = D3D12_BLEND_SRC_ALPHA,
-                        .DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
-                        .BlendOp = D3D12_BLEND_OP_ADD,
-                        .SrcBlendAlpha = D3D12_BLEND_ONE,
-                        .DestBlendAlpha = D3D12_BLEND_ZERO,
-                        .BlendOpAlpha = D3D12_BLEND_OP_ADD,
-                        .LogicOp = D3D12_LOGIC_OP_NOOP,
-                        .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
-                    }
+                // RenderTarget[0]
+                {
+                    .BlendEnable = FALSE,
+                    .LogicOpEnable = FALSE,
+                    .SrcBlend = D3D12_BLEND_SRC_ALPHA,
+                    .DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .LogicOp = D3D12_LOGIC_OP_NOOP,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
                 }
-            },
-            .SampleMask = UINT32_MAX,
+            }
+        },
+        .SampleMask = UINT32_MAX,
             // Use the default rasterizer state
             .RasterizerState {
                 .FillMode = USE_FILL_MODE,
@@ -242,9 +242,9 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
                 .ConservativeRaster = USE_CONSERVATIVE_RASTERIZATION_MODE
             },
             .DepthStencilState {
-                .DepthEnable = FALSE,
+                .DepthEnable = TRUE,                            // FALSE
                 .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
-                .DepthFunc = D3D12_COMPARISON_FUNC_NEVER,
+                .DepthFunc = D3D12_COMPARISON_FUNC_LESS,        // D3D12_COMPARISON_FUNC_NEVER
                 .StencilEnable = FALSE,
                 .StencilReadMask = 0,
                 .StencilWriteMask = 0,
@@ -307,6 +307,118 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
     return result;
 }
 
+#if TEST_UNCERTAINTY_REGION
+
+static auto CreatePipelineStateObjectForLinesRenderTexture(ID3D12Device* d3d_device, ID3D12RootSignature* rootSignature) -> ID3D12PipelineState*
+{
+    ID3D12PipelineState* pipelineState = nullptr;
+
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.frag.cso");
+
+    do
+    {
+        if (vertexShaderObj.pShaderBytecode == nullptr || vertexShaderObj.BytecodeLength == 0) break;
+        if (pixelShaderObj.pShaderBytecode == nullptr || pixelShaderObj.BytecodeLength == 0) break;
+
+        // Define the vertex input layout used for Input Assembler
+        const D3D12_INPUT_ELEMENT_DESC inputElementDescs[]{
+            { "POSITION", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+            { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 16, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+        };
+
+        // Describe and create the graphics pipeline state object (PSO).
+        const D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{
+            .pRootSignature = rootSignature,
+            .VS = vertexShaderObj,
+            .PS = pixelShaderObj,
+            .BlendState {
+                .AlphaToCoverageEnable = FALSE,
+                .IndependentBlendEnable = FALSE,
+                .RenderTarget {
+                // RenderTarget[0]
+                {
+                    .BlendEnable = FALSE,
+                    .LogicOpEnable = FALSE,
+                    .SrcBlend = D3D12_BLEND_SRC_ALPHA,
+                    .DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
+                    .BlendOp = D3D12_BLEND_OP_ADD,
+                    .SrcBlendAlpha = D3D12_BLEND_ONE,
+                    .DestBlendAlpha = D3D12_BLEND_ZERO,
+                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                    .LogicOp = D3D12_LOGIC_OP_NOOP,
+                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                }
+            }
+        },
+        .SampleMask = UINT32_MAX,
+            // Use the default rasterizer state
+            .RasterizerState {
+                .FillMode = D3D12_FILL_MODE_SOLID,
+                .CullMode = D3D12_CULL_MODE_BACK,
+                .FrontCounterClockwise = FALSE,
+                .DepthBias = 0,
+                .DepthBiasClamp = 0.0f,
+                .SlopeScaledDepthBias = 0.0f,
+                .DepthClipEnable = TRUE,
+                .MultisampleEnable = TEXTURE_SAMPLE_COUNT > 1U,
+                .AntialiasedLineEnable = FALSE,
+                .ForcedSampleCount = 0,
+                .ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+            },
+            .DepthStencilState {
+                .DepthEnable = FALSE,
+                .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO,
+                .DepthFunc = D3D12_COMPARISON_FUNC_NEVER,
+                .StencilEnable = FALSE,
+                .StencilReadMask = 0,
+                .StencilWriteMask = 0,
+                .FrontFace { },
+                .BackFace { }
+            },
+            .InputLayout {
+                .pInputElementDescs = inputElementDescs,
+                .NumElements = (UINT)std::size(inputElementDescs)
+            },
+            .IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+            .PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
+            .NumRenderTargets = 1,
+            .RTVFormats {
+                // RTVFormats[0]
+                { RENDER_TARGET_BUFFER_FOMRAT }
+            },
+            .DSVFormat = DXGI_FORMAT_UNKNOWN,
+            .SampleDesc {
+                .Count = TEXTURE_SAMPLE_COUNT,
+                .Quality = 0
+            },
+            .NodeMask = 0,
+            .CachedPSO { },
+            .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
+        };
+
+        HRESULT hRes = d3d_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&pipelineState));
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "CreateGraphicsPipelineState for PSO failed: %ld\n", hRes);
+            break;
+        }
+
+    }
+    while (false);
+
+    if (vertexShaderObj.pShaderBytecode != nullptr) {
+        free((void*)vertexShaderObj.pShaderBytecode);
+    }
+    if (pixelShaderObj.pShaderBytecode != nullptr) {
+        free((void*)pixelShaderObj.pShaderBytecode);
+    }
+
+    return pipelineState;
+}
+
+#endif
+
 static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator, ID3D12RootSignature* rootSignature) ->
                                                     std::tuple<ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*>
 {
@@ -314,8 +426,6 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
     ID3D12GraphicsCommandList* commandList = nullptr;
     ID3D12GraphicsCommandList* commandBundleList = nullptr;
     ID3D12DescriptorHeap* descriptorHeap = nullptr;
-
-    auto result = std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
 
     D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr_present.vert.cso");
     D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr_present.frag.cso");
@@ -431,11 +541,10 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateDescriptorHeap for texture shader resource view failed: %ld\n", hRes);
-            return result;
+            break;
         }
-
-        result = std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
-    } while (false);
+    }
+    while (false);
 
     if (vertexShaderObj.pShaderBytecode != nullptr) {
         free((void*)vertexShaderObj.pShaderBytecode);
@@ -444,12 +553,12 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
         free((void*)pixelShaderObj.pShaderBytecode);
     }
 
-    return result;
+    return std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
 }
 
 // @return std::make_tuple(uploadDevHostBuffer, vertexBuffer)
 static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12RootSignature* rootSignature, ID3D12CommandQueue *commandQueue,
-                                ID3D12GraphicsCommandList* commandList, ID3D12GraphicsCommandList* commandBundleList) -> std::pair<ID3D12Resource*, ID3D12Resource*>
+                                ID3D12GraphicsCommandList* commandList, ID3D12GraphicsCommandList* commandBundleList, ID3D12PipelineState* linePipelineState) -> std::pair<ID3D12Resource*, ID3D12Resource*>
 {
     const struct Vertex
     {
@@ -458,10 +567,27 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     } triangleVertices[]{
         // Direct3D是以左手作为前面背面顶点排列的依据
 #if TEST_UNCERTAINTY_REGION
-        // Each pixel width is 1.0 / 32.0 because of projection transformation: (1.0 - (-1.0)) / 64.0
-        {.position { 0.0f / 32.0f + 1.0f / (256.0f * 32.0f), 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },  // top
-        {.position { 0.75f, 0.0f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },                                    // right
-        {.position { 0.0f / 32.0f + 1.0f / (256.0f * 32.0f), -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }  // bottom
+        {.position { 0.0f / 32.0f + 1.0f / (32.0f * 256.0f), 4.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},   // top
+        {.position { 0.5f, 0.0f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },                                         // right
+        {.position { 0.0f, -3.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},                                    // bottom
+        // left lines
+        {.position { -0.75f, 1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},           // top line left point
+        {.position { -1.0f / 16.0f, 1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},    // top line right point
+
+        {.position { -0.75f, 0.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},           // center line left point
+        {.position { -1.0f / 16.0f, 0.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},    // center line right point
+
+        {.position { -0.75f, -1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.9f, 0.1f, 1.0f}},          // bottom line left point
+        {.position { -1.0f / 16.0f, -1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.9f, 0.1f, 1.0f}},   // bottom line right point
+        // right lines
+        {.position { 0.5f + 1.0f / 16.0f, 1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},  // top line left point
+        {.position { 0.75f, 1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},                // top line right point
+
+        {.position { 0.5f + 1.0f / 16.0f, 0.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},  // center line left point
+        {.position { 0.75f, 0.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},                // center line right point
+
+        {.position { 0.5f + 1.0f / 16.0f, -1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.9f, 0.1f, 1.0f}}, // bottom line left point
+        {.position { 0.75f, -1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.9f, 0.1f, 1.0f}},               // bottom line right point
 #else
         {.position { 0.0f, 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },    // top center
         {.position { 0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },  // bottom right
@@ -563,7 +689,17 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
     ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
 
-    commandBundleList->DrawInstanced((UINT)std::size(triangleVertices), 1, 0, 0);
+    commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);
+
+    if (linePipelineState != nullptr)
+    {
+        commandBundleList->SetPipelineState(linePipelineState);
+
+        commandBundleList->SetGraphicsRootSignature(rootSignature);
+        commandBundleList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+        commandBundleList->IASetVertexBuffers(0, 1, &vertexBufferView);
+        commandBundleList->DrawInstanced(12U, 1U, 3U, 0U);
+    }
 
     // End of the record
     hRes = commandBundleList->Close();
@@ -710,7 +846,7 @@ static auto CreateVertexBufferForPresentation(ID3D12Device* d3d_device, ID3D12Ro
     commandBundleList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     commandBundleList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
-    commandBundleList->DrawInstanced((UINT)std::size(squareVertices), 1, 0, 0);
+    commandBundleList->DrawInstanced((UINT)std::size(squareVertices), 1U, 0U, 0U);
 
     // End of the record
     hRes = commandBundleList->Close();
@@ -824,7 +960,13 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     commandList = std::get<1>(pipelineResult);
     commandBundle = std::get<2>(pipelineResult);
 
-    auto vertexBufferResult = CreateVertexBufferForRenderTexture(d3d_device, rootSignature, commandQueue, commandList, commandBundle);
+    ID3D12PipelineState* linePipelineState = nullptr;
+
+#if TEST_UNCERTAINTY_REGION
+    linePipelineState = CreatePipelineStateObjectForLinesRenderTexture(d3d_device, rootSignature);
+#endif
+
+    auto vertexBufferResult = CreateVertexBufferForRenderTexture(d3d_device, rootSignature, commandQueue, commandList, commandBundle, linePipelineState);
     uploadDevHostBuffer = std::get<0>(vertexBufferResult);
     vertexBuffer = std::get<1>(vertexBufferResult);
 
@@ -853,6 +995,10 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
 
     pipelineState->Release();
     pipelineState = nullptr;
+
+    if (linePipelineState != nullptr) {
+        linePipelineState->Release();
+    }
     
     commandList->Release();
     commandList = nullptr;
