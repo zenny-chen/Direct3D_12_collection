@@ -4,7 +4,7 @@
 #define TEST_UNCERTAINTY_REGION     0
 
 static constexpr D3D12_FILL_MODE USE_FILL_MODE = D3D12_FILL_MODE_SOLID;
-static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
 static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 
 // DO NOT configure this constant
@@ -211,22 +211,22 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
                 .AlphaToCoverageEnable = FALSE,
                 .IndependentBlendEnable = FALSE,
                 .RenderTarget {
-                // RenderTarget[0]
-                {
-                    .BlendEnable = FALSE,
-                    .LogicOpEnable = FALSE,
-                    .SrcBlend = D3D12_BLEND_SRC_ALPHA,
-                    .DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
-                    .BlendOp = D3D12_BLEND_OP_ADD,
-                    .SrcBlendAlpha = D3D12_BLEND_ONE,
-                    .DestBlendAlpha = D3D12_BLEND_ZERO,
-                    .BlendOpAlpha = D3D12_BLEND_OP_ADD,
-                    .LogicOp = D3D12_LOGIC_OP_NOOP,
-                    .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                    // RenderTarget[0]
+                    {
+                        .BlendEnable = FALSE,
+                        .LogicOpEnable = FALSE,
+                        .SrcBlend = D3D12_BLEND_SRC_ALPHA,
+                        .DestBlend = D3D12_BLEND_INV_SRC_ALPHA,
+                        .BlendOp = D3D12_BLEND_OP_ADD,
+                        .SrcBlendAlpha = D3D12_BLEND_ONE,
+                        .DestBlendAlpha = D3D12_BLEND_ZERO,
+                        .BlendOpAlpha = D3D12_BLEND_OP_ADD,
+                        .LogicOp = D3D12_LOGIC_OP_NOOP,
+                        .RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+                    }
                 }
-            }
-        },
-        .SampleMask = UINT32_MAX,
+            },
+            .SampleMask = UINT32_MAX,
             // Use the default rasterizer state
             .RasterizerState {
                 .FillMode = USE_FILL_MODE,
@@ -314,7 +314,7 @@ static auto CreatePipelineStateObjectForLinesRenderTexture(ID3D12Device* d3d_dev
     ID3D12PipelineState* pipelineState = nullptr;
 
     D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.frag.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
 
     do
     {
@@ -570,6 +570,10 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         {.position { 0.0f / 32.0f + 1.0f / (32.0f * 256.0f), 4.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},   // top
         {.position { 0.5f, 0.0f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },                                         // right
         {.position { 0.0f, -3.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},                                    // bottom
+        //{.position { 1.0f / (32.0f * 256.0f), 1.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},                    // top
+        //{.position { 1.0f / 32.0f, -1.0f / 32.0f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },                          // right
+        //{.position { -2.0f / 32.0f + 1.0f / (32.0f * 256.0f), -1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},   // bottom
+
         // left lines
         {.position { -0.75f, 1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},           // top line left point
         {.position { -1.0f / 16.0f, 1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.1f, 0.9f, 1.0f}},    // top line right point
