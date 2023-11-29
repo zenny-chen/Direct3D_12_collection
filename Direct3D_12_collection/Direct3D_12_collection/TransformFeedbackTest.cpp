@@ -422,7 +422,7 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
     d3d_device->CreateConstantBufferView(&cbvDesc, cbvCPUDescHandle);
 
     // Create the unordered access buffer view
-    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
+    const D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
         .Format = DXGI_FORMAT_UNKNOWN,
         .ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
         .Buffer {
@@ -517,6 +517,8 @@ auto RenderPostProcessForTransformFeedback() -> void
         fprintf(stderr, "Map read back buffer failed: %ld\n", hRes);
         return;
     }
+
+    printf("v[0].x = %f, v[0].y = %f, v[0].z = %f, v[0].w = %f\n", hostMemPtr[0], hostMemPtr[1], hostMemPtr[2], hostMemPtr[3]);
 
     s_readbackBuffer->Unmap(0, nullptr);
 }

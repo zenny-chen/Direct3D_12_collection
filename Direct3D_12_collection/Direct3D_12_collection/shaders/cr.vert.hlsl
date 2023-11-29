@@ -26,7 +26,7 @@
 struct PSInput
 {
     float4 position : SV_POSITION;
-    nointerpolation float4 color : COLOR;
+    linear centroid float4 color : COLOR;
 };
 
 // vertexIndex is a system-value input parameter and
