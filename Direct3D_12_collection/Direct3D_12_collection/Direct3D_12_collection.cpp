@@ -35,8 +35,10 @@ static ID3D12Resource* s_rtTexture = nullptr;
 static ID3D12Resource* s_texture = nullptr;
 
 static bool s_needRotate = true;
-static auto (*s_renderPostProcessFunc)() -> void = nullptr;
 static bool s_needSetDescriptorHeapInDirectCommandList = false;
+static auto (*s_renderPostProcessFunc)() -> void = nullptr;
+static auto (*s_translateCallbackFunc)(const TranslationType&) -> void;
+static auto (*s_fetchTranslationSetFunc)() -> CommonTranslationSet;
 
 // Synchronization objects.
 static UINT s_currFrameIndex = 0;
@@ -801,19 +803,6 @@ static auto CreateRenderTargetViews() -> bool
         rtvHandle.ptr += s_rtvDescriptorSize;
     }
 
-    const D3D12_DESCRIPTOR_HEAP_DESC cbv_uavHeapDesc{
-        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-        .NumDescriptors = 1U,
-        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
-        .NodeMask = 0
-    };
-    hRes = s_device->CreateDescriptorHeap(&cbv_uavHeapDesc, IID_PPV_ARGS(&s_descriptorHeap));
-    if (FAILED(hRes))
-    {
-        fprintf(stderr, "CreateDescriptorHeap for constant buffer view failed: %ld\n", hRes);
-        return false;
-    }
-
     return true;
 }
 
@@ -1129,7 +1118,7 @@ static auto CreateBasicVertexBuffer() -> bool
     s_commandQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
 
     // Initialize the vertex buffer view.
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
+    const D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
         .BufferLocation = s_vertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = (uint32_t)sizeof(squareVertices),
         .StrideInBytes = sizeof(squareVertices[0])
@@ -1168,15 +1157,10 @@ static auto CreateBasicVertexBuffer() -> bool
     memset(hostMemPtr, 0, CONSTANT_BUFFER_ALLOCATION_GRANULARITY);
     s_constantBuffer->Unmap(0, nullptr);
 
-    // Create the constant buffer view
-    const D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{
-        .BufferLocation = s_constantBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = CONSTANT_BUFFER_ALLOCATION_GRANULARITY
-    };
-    s_device->CreateConstantBufferView(&cbvDesc, s_descriptorHeap->GetCPUDescriptorHandleForHeapStart());
-
     // Record commands to the command list bundle.
     s_commandBundle->SetGraphicsRootSignature(s_rootSignature);
+    //commandBundleList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
+    // There's no need to invoke SetDescriptorHeaps when using Root Constant Buffer View.
     s_commandBundle->SetGraphicsRootConstantBufferView(0, s_constantBuffer->GetGPUVirtualAddress());
     s_commandBundle->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     s_commandBundle->IASetVertexBuffers(0, 1, &vertexBufferView);
@@ -1269,20 +1253,24 @@ static auto PopulateCommandList() -> bool
     HRESULT hRes = S_OK;
 
     // Update the constant buffer content
-    if (s_needRotate && s_constantBuffer != nullptr)
+    auto const needRotate = s_needRotate && s_constantBuffer != nullptr;
+    if (needRotate)
     {
-        const float constantBuffer[CONSTANT_BUFFER_ALLOCATION_GRANULARITY / sizeof(float)]{ s_rotateAngle };
-
-        D3D12_RANGE readRange{ 0, 0 };
-        void* hostMemPtr = nullptr;
-        hRes = s_constantBuffer->Map(0, &readRange, &hostMemPtr);
+        float* hostMemPtr = nullptr;
+        hRes = s_constantBuffer->Map(0, nullptr, (void**)&hostMemPtr);
         if (FAILED(hRes))
         {
             fprintf(stderr, "Map constant buffer failed: %ld\n", hRes);
             return false;
         }
 
-        memcpy(hostMemPtr, constantBuffer, sizeof(constantBuffer));
+        if (s_fetchTranslationSetFunc != nullptr) {
+            *(CommonTranslationSet*)hostMemPtr = s_fetchTranslationSetFunc();
+        }
+        else {
+            *hostMemPtr = s_rotateAngle;
+        }
+        
         s_constantBuffer->Unmap(0, nullptr);
     }
     
@@ -1291,7 +1279,7 @@ static auto PopulateCommandList() -> bool
         s_commandList->ExecuteBundle(s_commandBundle);
     }
 
-    if (s_needRotate && s_constantBuffer != nullptr)
+    if (needRotate && s_fetchTranslationSetFunc == nullptr)
     {
         if (++s_rotateAngle >= 360.0f) {
             s_rotateAngle = 0.0f;
@@ -1540,6 +1528,8 @@ static auto DestroyAllAssets() -> void
 
 static auto CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) -> LRESULT
 {
+    bool displayParams = false;
+
     switch (uMsg)
     {
     case WM_CREATE:
@@ -1590,15 +1580,86 @@ static auto CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         case VK_ESCAPE:
             PostQuitMessage(0);
             break;
+
         case VK_LEFT:
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::MOVE_LEFT);
+                displayParams = true;
+            }
             break;
+
         case VK_RIGHT:
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::MOVE_RIGHT);
+                displayParams = true;
+            }
             break;
+
+        case VK_UP:
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::MOVE_UP);
+                displayParams = true;
+            }
+            break;
+
+        case VK_DOWN:
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::MOVE_DOWN);
+                displayParams = true;
+            }
+            break;
+
+        case 'R':
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::ROTATE_CLOCKWISE);
+                displayParams = true;
+            }
+            break;
+
+        case 'L':
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::ROTATE_COUNTER_CLOCKWISE);
+                displayParams = true;
+            }
+            break;
+
+        case 'F':
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::MOVE_FAR);
+                displayParams = true;
+            }
+            break;
+
+        case 'N':
+            if (s_translateCallbackFunc != nullptr)
+            {
+                s_translateCallbackFunc(TranslationType::MOVE_NEAR);
+                displayParams = true;
+            }
+            break;
+
         case VK_SPACE:
         case VK_RETURN:
             s_needRotate = !s_needRotate;
             break;
         }
+
+        if (displayParams && s_fetchTranslationSetFunc != nullptr)
+        {
+            auto translationSet = s_fetchTranslationSetFunc();
+            char strBuf[128]{ };
+            sprintf_s(strBuf, "x = %.3f, y = %.3f, z = %.3f, angle = %d degrees", translationSet.xOffset, translationSet.yOffset, translationSet.zOffset, (int)translationSet.rotAngle);
+
+            SetWindowTextA(hWnd, strBuf);
+        }
+
         return 0;
 
     default:
@@ -1663,6 +1724,16 @@ static HWND CreateAndInitializeWindow(HINSTANCE hInstance, LPCSTR appName, int w
     return hWnd;
 }
 
+static auto RegisterTranslateCallback(auto (*pCallbackFunc)(const TranslationType&) -> void) -> void
+{
+    s_translateCallbackFunc = pCallbackFunc;
+}
+
+static auto RegisterFetchTranslationSetCallback(auto (*pCallbackFunc)() -> CommonTranslationSet) -> void
+{
+    s_fetchTranslationSetFunc = pCallbackFunc;
+}
+
 auto main(int argc, const char* argv[]) -> int
 {
     if (!CreateD3D12Device()) return 1;
@@ -1671,18 +1742,19 @@ auto main(int argc, const char* argv[]) -> int
     puts("[0]: Basic Rendering");
     puts("[1]: Basic Texturing");
     puts("[2]: Transform Feedback");
-    puts("[3]: Variable-Rate Shading (VRS)");
-    puts("[4]: Conservative Rasterization (CR)");
+    puts("[3]: Projection Test");
+    puts("[4]: Variable-Rate Shading (VRS)");
+    puts("[5]: Conservative Rasterization (CR)");
 
-    constexpr long optionalItemsBegin = 5L;
+    constexpr long optionalItemsBegin = 6L;
     constexpr long optionalItemCount = 3L;
     constexpr long totalItemCount = optionalItemsBegin + optionalItemCount;
     
     if (s_supportMeshShader)
     {
-        puts("[5]: Basic Mesh Shader Rendering");
-        puts("[6]: Only Mesh Shader Rendering");
-        puts("[7]: Mesh Shader Without Rasterization Rendering");
+        puts("[6]: Basic Mesh Shader Rendering");
+        puts("[7]: Only Mesh Shader Rendering");
+        puts("[8]: Mesh Shader Without Rasterization Rendering");
     }
 
     char cmdBuf[256]{ };
@@ -1728,11 +1800,6 @@ auto main(int argc, const char* argv[]) -> int
             s_commandList = std::get<2>(externalAssets);
             s_commandBundle = std::get<3>(externalAssets);
 
-            if (s_descriptorHeap != nullptr)
-            {
-                s_descriptorHeap->Release();
-                s_descriptorHeap = nullptr;
-            }
             s_descriptorHeap = std::get<4>(externalAssets);
             s_samplerDescriptorHeap = std::get<5>(externalAssets);
             s_devHostBuffer = std::get<6>(externalAssets);
@@ -1761,11 +1828,6 @@ auto main(int argc, const char* argv[]) -> int
             s_commandBundle = std::get<3>(externalAssets);
             if (s_commandBundle == nullptr) break;
 
-            if (s_descriptorHeap != nullptr)
-            {
-                s_descriptorHeap->Release();
-                s_descriptorHeap = nullptr;
-            }
             s_descriptorHeap = std::get<4>(externalAssets);
             s_devHostBuffer = std::get<5>(externalAssets);
             s_readbackHostBuffer = std::get<6>(externalAssets);
@@ -1778,18 +1840,38 @@ auto main(int argc, const char* argv[]) -> int
         }
         else if (selectedRenderModeIndex == 3)
         {
+            // Projection Test
+            auto externalAssets = CreateProjectionTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+
+            s_rootSignature = std::get<0>(externalAssets);
+            if (s_rootSignature == nullptr) break;
+
+            s_pipelineState = std::get<1>(externalAssets);
+            if (s_pipelineState == nullptr) break;
+
+            s_commandList = std::get<2>(externalAssets);
+            if (s_commandList == nullptr) break;
+
+            s_commandBundle = std::get<3>(externalAssets);
+            if (s_commandBundle == nullptr) break;
+
+            s_devHostBuffer = std::get<4>(externalAssets);
+            s_vertexBuffer = std::get<5>(externalAssets);
+            s_constantBuffer = std::get<6>(externalAssets);
+
+            if (!std::get<7>(externalAssets)) break;
+
+            RegisterTranslateCallback(ProjectionTestTranslateProcess);
+            RegisterFetchTranslationSetCallback(ProjectionTestFetchTranslationSet);
+        }
+        else if (selectedRenderModeIndex == 4)
+        {
             // Variable-rate Shading
             auto externalAssets = CreateVariableRateShadingTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
             s_rootSignature = std::get<0>(externalAssets);
             s_pipelineState = std::get<1>(externalAssets);
             s_commandList = std::get<2>(externalAssets);
             s_commandBundle = std::get<3>(externalAssets);
-
-            if (s_descriptorHeap != nullptr)
-            {
-                s_descriptorHeap->Release();
-                s_descriptorHeap = nullptr;
-            }
             s_descriptorHeap = std::get<4>(externalAssets);
             s_devHostBuffer = std::get<5>(externalAssets);
             s_vertexBuffer = std::get<6>(externalAssets);
@@ -1800,7 +1882,7 @@ auto main(int argc, const char* argv[]) -> int
 
             s_needSetDescriptorHeapInDirectCommandList = true;
         }
-        else if (selectedRenderModeIndex == 4)
+        else if (selectedRenderModeIndex == 5)
         {
             // Conservative Rasterization
             auto externalAssets = CreateConservativeRasterizationTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
@@ -1809,14 +1891,7 @@ auto main(int argc, const char* argv[]) -> int
             s_commandList = std::get<2>(externalAssets);
             s_commandBundle = std::get<3>(externalAssets);
             s_rtvTextureDescriptorHeap = std::get<4>(externalAssets);
-
-            if (s_descriptorHeap != nullptr)
-            {
-                s_descriptorHeap->Release();
-                s_descriptorHeap = nullptr;
-            }
             s_descriptorHeap = std::get<5>(externalAssets);
-
             s_devHostBuffer = std::get<6>(externalAssets);
             s_vertexBuffer = std::get<7>(externalAssets);
             s_rtTexture = std::get<8>(externalAssets);
@@ -1862,11 +1937,6 @@ auto main(int argc, const char* argv[]) -> int
 
             s_devHostBuffer = std::get<4>(externalAssets);
             s_uavBuffer = std::get<5>(externalAssets);
-            if (s_descriptorHeap != nullptr)
-            {
-                s_descriptorHeap->Release();
-                s_descriptorHeap = nullptr;
-            }
             s_descriptorHeap = std::get<6>(externalAssets);
 
             needRender = false;

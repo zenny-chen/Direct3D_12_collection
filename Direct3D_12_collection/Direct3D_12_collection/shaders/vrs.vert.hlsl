@@ -35,14 +35,14 @@ struct PSInput
 struct CBRotationAngle
 {
     float rotAngle;
-    int paddings[256 - 4];
+    int paddings[64 - 1];
 };
 
 struct CBTranslateOffset
 {
     float xOffset;
     float yOffset;
-    int paddings[256 - 8];
+    int paddings[64 - 2];
 };
 
 ConstantBuffer<CBTranslateOffset> cbTranslateOffset : register(b0);

@@ -35,7 +35,7 @@ struct PSInput
 struct CBRotationAngle
 {
     float rotAngle;
-    int paddings[256 - 4];
+    int paddings[64 - 1];
 };
 
 ConstantBuffer<CBRotationAngle> cbRotationAngle : register(b0);

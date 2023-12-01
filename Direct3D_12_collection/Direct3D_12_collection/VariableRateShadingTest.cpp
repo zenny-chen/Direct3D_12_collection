@@ -331,7 +331,7 @@ static auto CreateVertexBuffer(ID3D12Device* d3d_device, ID3D12RootSignature* ro
     commandQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
 
     // Initialize the vertex buffer view.
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
+    const D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
         .BufferLocation = vertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = (uint32_t)sizeof(squareVertices),
         .StrideInBytes = sizeof(squareVertices[0])

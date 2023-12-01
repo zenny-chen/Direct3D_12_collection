@@ -2,7 +2,7 @@
 
 
 #define TEST_UNCERTAINTY_REGION     0
-#define TEST_EARLY_DEPTH_CULLING    1
+#define TEST_EARLY_DEPTH_CULLING    0
 #define BIND_DEPTH_STENCIL_AS_SRV   0
 
 static constexpr D3D12_FILL_MODE USE_FILL_MODE = D3D12_FILL_MODE_SOLID;
@@ -40,6 +40,14 @@ static auto CreateRootSignature(ID3D12Device* d3d_device, bool isForRenderTextur
             .RegisterSpace = 0,
             .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
         },
+        // b0 (for render target texture rendering)
+        {
+            .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
+            .NumDescriptors = 1,
+            .BaseShaderRegister = 0,
+            .RegisterSpace = 0,
+            .OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND
+        },
         // u0 (for render target texture rendering)
         {
             .RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
@@ -61,21 +69,42 @@ static auto CreateRootSignature(ID3D12Device* d3d_device, bool isForRenderTextur
             // This texture buffer will just be accessed in a pixel shader
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
         },
-        // u0 (for render target texture rendering)
+        // b0 (for render target texture rendering)
         {
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
             .DescriptorTable {
                 .NumDescriptorRanges = 1,
                 .pDescriptorRanges = &descRanges[1]
             },
-            // This texture buffer will just be accessed in a pixel shader
+            // This constant buffer view buffer will just be accessed in a vertex shader
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX
+        },
+        // u0 (for render target texture rendering)
+        {
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+            .DescriptorTable {
+                .NumDescriptorRanges = 1,
+                .pDescriptorRanges = &descRanges[2]
+            },
+            // This unordered access view buffer will just be accessed in a pixel shader
             .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
+        },
+        // b1 (for render target texture rendering)
+        {
+            .ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
+            .Constants {
+                .ShaderRegister = 1,
+                .RegisterSpace = 0,
+                .Num32BitValues = 1
+            },
+            // This unordered access view buffer will just be accessed in a pixel shader
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX
         }
     };
 
     // Create a root signature.
     const D3D12_ROOT_SIGNATURE_DESC rootSignatureDesc {
-        .NumParameters = 1U,
+        .NumParameters = isForRenderTexture ? 3U : 1U,
         .pParameters = isForRenderTexture ? &rootParameters[1] : &rootParameters[0],
         .NumStaticSamplers = 0,
         .pStaticSamplers = nullptr,
@@ -271,16 +300,16 @@ static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::t
     return result;
 }
 
-// @return [pipelineState, commandList, commandBundleList, uavDescriptorHeap]
+// @return [pipelineState, commandList, commandBundleList, cbv_uavDescriptorHeap]
 static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, ID3D12CommandAllocator *commandAllocator, ID3D12CommandAllocator* commandBundleAllocator, ID3D12RootSignature* rootSignature) ->
                                         std::tuple<ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*>
 {
     ID3D12PipelineState* pipelineState = nullptr;
     ID3D12GraphicsCommandList* commandList = nullptr;
     ID3D12GraphicsCommandList* commandBundleList = nullptr;
-    ID3D12DescriptorHeap* uavDescriptorHeap = nullptr;
+    ID3D12DescriptorHeap* cbv_uavDescriptorHeap = nullptr;
 
-    auto result = std::make_tuple(pipelineState, commandList, commandBundleList, uavDescriptorHeap);
+    auto result = std::make_tuple(pipelineState, commandList, commandBundleList, cbv_uavDescriptorHeap);
 
     D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.vert.cso");
     D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.frag.cso");
@@ -387,20 +416,20 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
             break;
         }
 
-        const D3D12_DESCRIPTOR_HEAP_DESC uavHeapDesc {
+        const D3D12_DESCRIPTOR_HEAP_DESC cbv_uavHeapDesc {
             .Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            .NumDescriptors = 1U,
+            .NumDescriptors = 2U,       // This descriptor heap is for both of CBV and UAV buffers.
             .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
             .NodeMask = 0
         };
-        hRes = d3d_device->CreateDescriptorHeap(&uavHeapDesc, IID_PPV_ARGS(&uavDescriptorHeap));
+        hRes = d3d_device->CreateDescriptorHeap(&cbv_uavHeapDesc, IID_PPV_ARGS(&cbv_uavDescriptorHeap));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateDescriptorHeap for unordered access view failed: %ld\n", hRes);
             return result;
         }
 
-        result = std::make_tuple(pipelineState, commandList, commandBundleList, uavDescriptorHeap);
+        result = std::make_tuple(pipelineState, commandList, commandBundleList, cbv_uavDescriptorHeap);
     }
     while (false);
 
@@ -663,9 +692,9 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
     return std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
 }
 
-// @return [uploadDevHostBuffer, vertexBuffer, uavBuffer, readbackDevHostBuffer]
+// @return [uploadDevHostBuffer, vertexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer]
 static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12RootSignature* rootSignature, ID3D12CommandQueue *commandQueue, ID3D12GraphicsCommandList* commandList,
-                                            ID3D12GraphicsCommandList* commandBundleList, ID3D12PipelineState* linePipelineState, ID3D12DescriptorHeap* uavDescriptorHeap) -> std::tuple<ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
+                                            ID3D12GraphicsCommandList* commandBundleList, ID3D12PipelineState* linePipelineState, ID3D12DescriptorHeap* cbv_uavDescriptorHeap) -> std::tuple<ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
 {
     const struct Vertex
     {
@@ -706,9 +735,9 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         {.position { -0.7f, -0.5f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },   // bottom left
 #endif // TEST_EARLY_DEPTH_CULLING
 
-        {.position { 0.0f, 0.75f, -0.025f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },    // top center
-        {.position { 0.75f, -0.75f, -0.025f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },  // bottom right
-        {.position { -0.75f, -0.75f, -0.025f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }  // bottom left
+        {.position { 0.0f, 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },    // top center
+        {.position { 0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },  // bottom right
+        {.position { -0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }  // bottom left
 #endif
     };
 
@@ -744,9 +773,10 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     ID3D12Resource* uploadDevHostBuffer = nullptr;
     ID3D12Resource* readbackDevHostBuffer = nullptr;
     ID3D12Resource* vertexBuffer = nullptr;
+    ID3D12Resource* constantBuffer = nullptr;
     ID3D12Resource* uavBuffer = nullptr;
 
-    auto result = std::make_tuple(uploadDevHostBuffer, vertexBuffer, uavBuffer, readbackDevHostBuffer);
+    auto result = std::make_tuple(uploadDevHostBuffer, vertexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer);
 
     // Create vertexBuffer on GPU side.
     HRESULT hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &vbResourceDesc,
@@ -759,10 +789,32 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
     // Create uploadDevHostBuffer with host visible for upload
     hRes = d3d_device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &vbResourceDesc,
-        D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&uploadDevHostBuffer));
+                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&uploadDevHostBuffer));
     if (FAILED(hRes))
     {
         fprintf(stderr, "CreateCommittedResource for uploadDevHostBuffer failed: %ld\n", hRes);
+        return result;
+    }
+
+    const D3D12_RESOURCE_DESC cbResourceDesc{
+        .Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+        .Alignment = 0,
+        .Width = CONSTANT_BUFFER_ALLOCATION_GRANULARITY,
+        .Height = 1U,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = DXGI_FORMAT_UNKNOWN,
+        .SampleDesc {.Count = 1U, .Quality = 0 },
+        .Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
+    // Create constant buffer object
+    hRes = d3d_device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &cbResourceDesc,
+                                            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&constantBuffer));
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "CreateCommittedResource for constant buffer failed: %ld\n", hRes);
         return result;
     }
 
@@ -800,7 +852,20 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         return result;
     }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE uavCPUDescHandle = uavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    const UINT cbv_uavDescriptorSize = d3d_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cbvCPUDescHandle = cbv_uavDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+
+    // Create the constant buffer view
+    const D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc{
+        .BufferLocation = constantBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = CONSTANT_BUFFER_ALLOCATION_GRANULARITY
+    };
+    d3d_device->CreateConstantBufferView(&cbvDesc, cbvCPUDescHandle);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE uavCPUDescHandle = cbvCPUDescHandle;
+    uavCPUDescHandle.ptr += cbv_uavDescriptorSize;
+
     // Create the unordered access buffer view
     const D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {
         .Format = DXGI_FORMAT_UNKNOWN,
@@ -846,25 +911,48 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         return result;
     }
 
+    // Upload data to constant buffer
+    hRes = constantBuffer->Map(0U, nullptr, &hostMemPtr);
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "Map constant buffer failed: %ld\n", hRes);
+        return result;
+    }
+
+    memset(hostMemPtr, 0, CONSTANT_BUFFER_ALLOCATION_GRANULARITY);
+    // Set translations
+    struct { float rotAngle; float zOffsetFront; float zOffsetBack; } *pTranslations;
+    pTranslations = (decltype(pTranslations))hostMemPtr;
+    pTranslations->rotAngle = 0.0f;
+    pTranslations->zOffsetFront = -2.3f;    // -1.8 will cull the front triangle when using frustum perspective projection
+    pTranslations->zOffsetBack = -2.325f;
+
+    constantBuffer->Unmap(0, nullptr);
+
     // Execute the command list to complete the copy operation
     ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)commandList };
     commandQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
 
     // Initialize the vertex buffer view.
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
+    const D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
         .BufferLocation = vertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = (uint32_t)sizeof(triangleVertices),
         .StrideInBytes = sizeof(triangleVertices[0])
     };
 
-    D3D12_GPU_DESCRIPTOR_HANDLE uavGPUDescHandle = uavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
-    ID3D12DescriptorHeap* const descHeaps[]{ uavDescriptorHeap };
+    D3D12_GPU_DESCRIPTOR_HANDLE cbvGPUDescHandle = cbv_uavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+    D3D12_GPU_DESCRIPTOR_HANDLE uavGPUDescHandle = cbvGPUDescHandle;
+    uavGPUDescHandle.ptr += cbv_uavDescriptorSize;
+
+    ID3D12DescriptorHeap* const descHeaps[]{ cbv_uavDescriptorHeap };
 
     // Record commands to the command list bundle.
     commandBundleList->SetGraphicsRootSignature(rootSignature);
     // ATTENTION: SetDescriptorHeaps should be set into command bundle list as well as command list
     commandBundleList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
-    commandBundleList->SetGraphicsRootDescriptorTable(0, uavGPUDescHandle);     // rootParameters[0]
+    commandBundleList->SetGraphicsRootDescriptorTable(0U, cbvGPUDescHandle);     // rootParameters[0]
+    commandBundleList->SetGraphicsRootDescriptorTable(1U, uavGPUDescHandle);     // rootParameters[1]
+    commandBundleList->SetGraphicsRoot32BitConstant(2U, 0, 0);                   // rootParameters[2]
     commandBundleList->IASetPrimitiveTopology(RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY);
     commandBundleList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
@@ -874,6 +962,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);
 
 #if TEST_EARLY_DEPTH_CULLING
+    commandBundleList->SetGraphicsRoot32BitConstant(2U, 1U, 0U);                // rootParameters[2]
     commandBundleList->DrawInstanced(3U, 1U, 3U, 0U);
 #endif
 
@@ -900,7 +989,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     // we just want to wait for setup to complete before continuing.
     WaitForPreviousFrame(commandQueue);
 
-    return std::make_tuple(uploadDevHostBuffer, vertexBuffer, uavBuffer, readbackDevHostBuffer);
+    return std::make_tuple(uploadDevHostBuffer, vertexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer);
 }
 
 // @return std::make_pair(uploadDevHostBuffer, vertexBuffer)
@@ -996,7 +1085,7 @@ static auto CreateVertexBufferForPresentation(ID3D12Device* d3d_device, ID3D12Ro
     commandQueue->ExecuteCommandLists((UINT)std::size(ppCommandLists), ppCommandLists);
 
     // Initialize the vertex buffer view.
-    D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
+    const D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
         .BufferLocation = vertexBuffer->GetGPUVirtualAddress(),
         .SizeInBytes = (uint32_t)sizeof(squareVertices),
         .StrideInBytes = sizeof(squareVertices[0])
@@ -1172,11 +1261,12 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     ID3D12GraphicsCommandList* commandBundle = nullptr;
     ID3D12DescriptorHeap* rtvDescriptorHeap = nullptr;
     ID3D12DescriptorHeap* dsvDescriptorHeap = nullptr;
-    ID3D12DescriptorHeap* uavDescriptorHeap = nullptr;
+    ID3D12DescriptorHeap* cbv_uavDescriptorHeap = nullptr;
     ID3D12Resource* uploadDevHostBuffer = nullptr;
     ID3D12Resource* vertexBuffer = nullptr;
     ID3D12Resource* rtTexture = nullptr;
     ID3D12Resource* dsTexture = nullptr;
+    ID3D12Resource* constantBuffer = nullptr;
     ID3D12Resource* uavBuffer = nullptr;
     ID3D12Resource* readbackDevHostBuffer = nullptr;
     ID3D12DescriptorHeap* srvDescriptorHeap = nullptr;
@@ -1197,7 +1287,7 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     pipelineState = std::get<0>(pipelineResult);
     commandList = std::get<1>(pipelineResult);
     commandBundle = std::get<2>(pipelineResult);
-    uavDescriptorHeap = std::get<3>(pipelineResult);
+    cbv_uavDescriptorHeap = std::get<3>(pipelineResult);
 
     ID3D12PipelineState* linePipelineState = nullptr;
 
@@ -1205,17 +1295,18 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     linePipelineState = CreatePipelineStateObjectForLinesRenderTexture(d3d_device, rootSignature);
 #endif
 
-    auto const renderVertexBufferResult = CreateVertexBufferForRenderTexture(d3d_device, rootSignature, commandQueue, commandList, commandBundle, linePipelineState, uavDescriptorHeap);
+    auto const renderVertexBufferResult = CreateVertexBufferForRenderTexture(d3d_device, rootSignature, commandQueue, commandList, commandBundle, linePipelineState, cbv_uavDescriptorHeap);
     uploadDevHostBuffer = std::get<0>(renderVertexBufferResult);
     vertexBuffer = std::get<1>(renderVertexBufferResult);
-    uavBuffer = std::get<2>(renderVertexBufferResult);
-    readbackDevHostBuffer = std::get<3>(renderVertexBufferResult);
+    constantBuffer = std::get<2>(renderVertexBufferResult);
+    uavBuffer = std::get<3>(renderVertexBufferResult);
+    readbackDevHostBuffer = std::get<4>(renderVertexBufferResult);
 
     do
     {
         if (!ResetCommandAllocatorAndList(commandAllocator, commandList, pipelineState)) break;
 
-        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, uavDescriptorHeap, rtTexture, dsTexture, uavBuffer, readbackDevHostBuffer)) break;
+        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, cbv_uavDescriptorHeap, rtTexture, dsTexture, uavBuffer, readbackDevHostBuffer)) break;
 
         // Execute the command list.
         ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)commandList };
@@ -1254,7 +1345,8 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
         linePipelineState->Release();
     }
 
-    uavDescriptorHeap->Release();
+    cbv_uavDescriptorHeap->Release();
+    constantBuffer->Release();
     uavBuffer->Release();
     readbackDevHostBuffer->Release();
     

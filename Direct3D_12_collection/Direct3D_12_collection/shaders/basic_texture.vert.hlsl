@@ -35,19 +35,19 @@ struct PSInput
 struct CBRotationAngle
 {
     float rotAngle;
-    int paddings[256 - 4];
+    int paddings[64 - 1];
 };
 
 ConstantBuffer<CBRotationAngle> cbRotationAngle : register(b0, space0);
 
 PSInput VSMain(float4 position : POSITION, float2 texCoords : TEXCOORD)
 {
-    // glTranslate(offset, offset, -2.3, 1.0)
+    // glTranslate(0.0, 0.0, -7.0, 1.0)
     const float4x4 translateMatrix = {
         1.0f, 0.0f, 0.0f, 0.0f,     // row 0
         0.0f, 1.0f, 0.0f, 0.0f,     // row 1
         0.0f, 0.0f, 1.0f, 0.0f,     // row 2
-        0.0f, 0.0f, -2.3f, 1.0f     // row 3
+        0.0f, 0.0f, -7.0f, 1.0f     // row 3
     };
 
     const float rotRadian = radians(cbRotationAngle.rotAngle);
@@ -60,12 +60,12 @@ PSInput VSMain(float4 position : POSITION, float2 texCoords : TEXCOORD)
         0.0f, 0.0f, 0.0f, 1.0f                          // row 3
     };
 
-    // glOrtho(-1.0, 1.0, -1.0, 1.0, 1.0, 3.0)
+    // glOrtho(-1.0, 1.0, -1.0, 1.0, 1.0, 9.0)
     const float4x4 projectionMatrix = {
         1.0f, 0.0f, 0.0f, 0.0f,     // row 0
         0.0f, 1.0f, 0.0f, 0.0f,     // row 1
-        0.0f, 0.0f, -1.0f, 0.0f,    // row 2
-        0.0f, 0.0f, -2.0f, 1.0f     // row 3
+        0.0f, 0.0f, -0.25f, 0.0f,    // row 2
+        0.0f, 0.0f, -1.25f, 1.0f     // row 3
     };
 
     PSInput result;

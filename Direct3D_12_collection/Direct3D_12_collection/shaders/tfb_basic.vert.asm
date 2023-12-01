@@ -19,7 +19,7 @@
 ; SV_Position              0   xyzw        0      POS   float   xyzw
 ; COLOR                    0   xyzw        1     NONE   float   xyzw
 ;
-; shader hash: 0698b693e4e88052469f730365fc175c
+; shader hash: f46d535ddaef66892c0724803736f6ef
 ;
 ; Pipeline Runtime Information: 
 ;
@@ -54,12 +54,12 @@
 ;       {
 ;
 ;           float rotAngle;                           ; Offset:    0
-;           int paddings[252];                        ; Offset:   16
+;           int paddings[63];                         ; Offset:   16
 ;       
 ;       } cbRotationAngle;                            ; Offset:    0
 ;
 ;   
-;   } cbRotationAngle;                                ; Offset:    0 Size:  4036
+;   } cbRotationAngle;                                ; Offset:    0 Size:  1012
 ;
 ; }
 ;
@@ -107,7 +107,7 @@ target triple = "dxil-ms-dx"
 %"class.RWStructuredBuffer<PSInput>" = type { %struct.PSInput }
 %struct.PSInput = type { <4 x float>, <4 x float> }
 %cbRotationAngle = type { %struct.CBRotationAngle }
-%struct.CBRotationAngle = type { float, [252 x i32] }
+%struct.CBRotationAngle = type { float, [63 x i32] }
 
 define void @VSMain() {
   %1 = call %dx.types.Handle @dx.op.createHandle(i32 57, i8 1, i32 0, i32 0, i1 false)  ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
@@ -191,7 +191,7 @@ attributes #2 = { nounwind readonly }
 !6 = !{i32 0, %"class.RWStructuredBuffer<PSInput>"* undef, !"", i32 0, i32 0, i32 1, i32 12, i1 false, i1 false, i1 false, !7}
 !7 = !{i32 1, i32 32}
 !8 = !{!9}
-!9 = !{i32 0, %cbRotationAngle* undef, !"", i32 0, i32 0, i32 1, i32 4036, null}
+!9 = !{i32 0, %cbRotationAngle* undef, !"", i32 0, i32 0, i32 1, i32 1012, null}
 !10 = !{[11 x i32] [i32 9, i32 8, i32 3, i32 3, i32 4, i32 12, i32 16, i32 32, i32 64, i32 128, i32 0]}
 !11 = !{void ()* @VSMain, !"VSMain", !12, !4, !23}
 !12 = !{!13, !20, null}

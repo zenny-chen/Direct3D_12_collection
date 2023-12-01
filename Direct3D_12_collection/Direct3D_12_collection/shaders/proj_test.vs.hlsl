@@ -34,57 +34,51 @@
 struct PSInput
 {
     float4 position : SV_POSITION;
-    linear centroid float4 color : COLOR;
+    linear float4 color : COLOR;
 };
 
 // Old declaration
-//cbuffer CBTranslations : register(b0)
+// cbuffer CBTranslations : register(b0)
 // In Shader Model 5.1, we can use
 struct CBTranslations
 {
     float rotAngle;
-    float zOffsetFront;
-    float zOffsetBack;
-    int paddings[64 - 3];
-};
-
-struct CBDrawIndex
-{
-    uint index;
+    float xOffset;
+    float yOffset;
+    float zOffset;
+    
+    int paddings[64 - 4];
 };
 
 ConstantBuffer<CBTranslations> cbTranslations : register(b0, space0);
-ConstantBuffer<CBDrawIndex> cbDrawindex : register(b1, space0);
 
 // vertexIndex is a system-value input parameter and
 // shadingRate is a system-value output parameter
-PSInput VSMain(float4 position : POSITION, float4 color : COLOR, uint vertexIndex : SV_VertexID, out uint shadingRate : SV_ShadingRate)
+PSInput VSMain(float4 position : POSITION, float4 color : COLOR)
 {
-    const float zOffset = cbDrawindex.index == 0U ? cbTranslations.zOffsetFront : cbTranslations.zOffsetBack;
-
     // glTranslate(xOffset, yOffset, zOffset, 1.0)
     const float4x4 translateMatrix = {
-        1.0f, 0.0f, 0.0f, 0.0f,     // row 0
-        0.0f, 1.0f, 0.0f, 0.0f,     // row 1
-        0.0f, 0.0f, 1.0f, 0.0f,     // row 2
-        0.0f, 0.0f, zOffset, 1.0f   // row 3
+        1.0f, 0.0f, 0.0f, 0.0f,                                                         // row 0
+        0.0f, 1.0f, 0.0f, 0.0f,                                                         // row 1
+        0.0f, 0.0f, 1.0f, 0.0f,                                                         // row 2
+        cbTranslations.xOffset, cbTranslations.yOffset, cbTranslations.zOffset, 1.0f    // row 3
     };
 
-#if 1
-    // glOrtho(-1.0, 1.0, -1.0, 1.0, 1.0, 3.0)
+#if 0
+    // glOrtho(-1.0, 1.0, -1.0, 1.0, 1.0, 9.0)
     const float4x4 projectionMatrix = {
-        1.0f, 0.0f, 0.0f, 0.0f,     // row 0
-        0.0f, 1.0f, 0.0f, 0.0f,     // row 1
-        0.0f, 0.0f, -1.0f, 0.0f,    // row 2
-        0.0f, 0.0f, -2.0f, 1.0f     // row 3
+        1.0f, 0.0f, 0.0f, 0.0f,         // row 0
+        0.0f, 1.0f, 0.0f, 0.0f,         // row 1
+        0.0f, 0.0f, -0.25f, 0.0f,       // row 2
+        0.0f, 0.0f, -1.25f, 1.0f        // row 3
     };
 #else
     // glFrustum(-1.0, 1.0, -1.0, 1.0, 1.0, 9.0)
     const float4x4 projectionMatrix = {
-        1.0f, 0.0f, 0.0f, 0.0f,     // row 0
-        0.0f, 1.0f, 0.0f, 0.0f,     // row 1
-        0.0f, 0.0f, -1.25f, -1.0f,   // row 2
-        0.0f, 0.0f, -2.25f, 0.0f     // row 3
+        1.0f, 0.0f, 0.0f, 0.0f,         // row 0
+        0.0f, 1.0f, 0.0f, 0.0f,         // row 1
+        0.0f, 0.0f, -1.25f, -1.0f,      // row 2
+        0.0f, 0.0f, -2.25f, 0.0f        // row 3
     };
 #endif
 
@@ -101,28 +95,6 @@ PSInput VSMain(float4 position : POSITION, float4 color : COLOR, uint vertexInde
     PSInput result;
     result.position = mul(position, mul(rotateMatrix, mul(translateMatrix, projectionMatrix)));
     result.color = color;
-
-    enum D3D12_SHADING_RATE
-    {
-        D3D12_SHADING_RATE_1X1 = 0,
-        D3D12_SHADING_RATE_1X2 = 0x1,
-        D3D12_SHADING_RATE_2X1 = 0x4,
-        D3D12_SHADING_RATE_2X2 = 0x5,
-        D3D12_SHADING_RATE_2X4 = 0x6,
-        D3D12_SHADING_RATE_4X2 = 0x9,
-        D3D12_SHADING_RATE_4X4 = 0xa
-    };
-
-    const D3D12_SHADING_RATE shadingRates[] = {
-        D3D12_SHADING_RATE_1X1,
-        D3D12_SHADING_RATE_1X2,
-        D3D12_SHADING_RATE_2X1,
-        D3D12_SHADING_RATE_2X2,
-        D3D12_SHADING_RATE_2X4,
-        D3D12_SHADING_RATE_4X2,
-        D3D12_SHADING_RATE_4X4
-    };
-    shadingRate = D3D12_SHADING_RATE_1X1;    // shadingRates[vertexIndex];
 
     return result;
 }

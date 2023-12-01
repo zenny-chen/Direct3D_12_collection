@@ -111,13 +111,33 @@ enum MeshShaderExecMode
     ONLY_MESH_SHADER_MODE
 };
 
+enum TranslationType
+{
+    ROTATE_CLOCKWISE,
+    ROTATE_COUNTER_CLOCKWISE,
+    MOVE_LEFT,
+    MOVE_RIGHT,
+    MOVE_UP,
+    MOVE_DOWN,
+    MOVE_NEAR,
+    MOVE_FAR
+};
+
+struct CommonTranslationSet
+{
+    float rotAngle;
+    float xOffset;
+    float yOffset;
+    float zOffset;
+};
+
 // Window Width
 static constexpr int WINDOW_WIDTH = 512;
 
 // Window Height
 static constexpr int WINDOW_HEIGHT = 512;
 
-// Defined by the Direct3D 12 Spec
+// Defined by the Direct3D 12 Spec (In bytes)
 static constexpr UINT CONSTANT_BUFFER_ALLOCATION_GRANULARITY = 256U;
 
 // Default swap-chain buffer and render target buffer format
@@ -161,10 +181,14 @@ extern auto SyncAndReadFromDeviceResource(
 extern auto CreateTextureBasicTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
                                         std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>;
 
+extern auto RenderPostProcessForTransformFeedback() -> void;
 extern auto CreateTransformFeedbackTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
                                         std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>;
 
-extern auto RenderPostProcessForTransformFeedback() -> void;
+extern auto ProjectionTestTranslateProcess(const TranslationType& transType) -> void;
+extern auto ProjectionTestFetchTranslationSet() -> CommonTranslationSet;
+extern auto CreateProjectionTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>;
 
 extern auto CreateMeshShaderTestAssets(MeshShaderExecMode execMode, ID3D12Device* d3d_device, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
                                         std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*>;

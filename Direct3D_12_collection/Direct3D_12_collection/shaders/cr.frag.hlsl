@@ -6,7 +6,7 @@ struct PSInput
     linear centroid float4 color : COLOR;
 };
 
-RWBuffer<uint> uavOutput : register(u0);
+RWBuffer<uint> uavOutput : register(u0, space0);
 
 [earlydepthstencil]
 // The `linear` interpolation will not apply!

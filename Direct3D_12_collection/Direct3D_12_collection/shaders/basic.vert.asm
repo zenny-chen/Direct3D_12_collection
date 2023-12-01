@@ -14,7 +14,7 @@
 ; SV_Position              0   xyzw        0      POS   float   xyzw
 ; COLOR                    0   xyzw        1     NONE   float   xyzw
 ;
-; shader hash: d24e9153d770c1fc6ae5c351385c7533
+; shader hash: 26c2bdbd7550c83ef8638500e4b0b996
 ;
 ; Pipeline Runtime Information: 
 ;
@@ -48,12 +48,12 @@
 ;       {
 ;
 ;           float rotAngle;                           ; Offset:    0
-;           int paddings[252];                        ; Offset:   16
+;           int paddings[63];                         ; Offset:   16
 ;       
 ;       } cbRotationAngle;                            ; Offset:    0
 ;
 ;   
-;   } cbRotationAngle;                                ; Offset:    0 Size:  4036
+;   } cbRotationAngle;                                ; Offset:    0 Size:  1012
 ;
 ; }
 ;
@@ -85,7 +85,7 @@ target triple = "dxil-ms-dx"
 %dx.types.Handle = type { i8* }
 %dx.types.CBufRet.f32 = type { float, float, float, float }
 %cbRotationAngle = type { %struct.CBRotationAngle }
-%struct.CBRotationAngle = type { float, [252 x i32] }
+%struct.CBRotationAngle = type { float, [63 x i32] }
 
 define void @VSMain() {
   %1 = call %dx.types.Handle @dx.op.createHandle(i32 57, i8 2, i32 0, i32 0, i1 false)  ; CreateHandle(resourceClass,rangeId,index,nonUniformIndex)
@@ -156,7 +156,7 @@ attributes #2 = { nounwind readonly }
 !3 = !{!"vs", i32 6, i32 5}
 !4 = !{null, null, !5, null}
 !5 = !{!6}
-!6 = !{i32 0, %cbRotationAngle* undef, !"", i32 0, i32 0, i32 1, i32 4036, null}
+!6 = !{i32 0, %cbRotationAngle* undef, !"", i32 0, i32 0, i32 1, i32 1012, null}
 !7 = !{[10 x i32] [i32 8, i32 8, i32 3, i32 3, i32 4, i32 12, i32 16, i32 32, i32 64, i32 128]}
 !8 = !{void ()* @VSMain, !"VSMain", !9, !4, null}
 !9 = !{!10, !15, null}
