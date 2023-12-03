@@ -3,12 +3,12 @@
 
 #define TEST_UNCERTAINTY_REGION     0
 #define TEST_EARLY_DEPTH_CULLING    0
-#define TEST_VARIABLE_SHADING_RATE  1
+#define TEST_VARIABLE_SHADING_RATE  0
 #define BIND_DEPTH_STENCIL_AS_SRV   0
 #define TEST_PRIMITIVE_POINT        0
 
 static constexpr D3D12_FILL_MODE USE_FILL_MODE = D3D12_FILL_MODE_SOLID;
-static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
 static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = TEST_PRIMITIVE_POINT  != 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 
 // DO NOT configure this constant
@@ -993,7 +993,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
 #if TEST_VARIABLE_SHADING_RATE
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
-    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
     commandBundleList->DrawInstanced((UINT)std::size(triangleVertices), 1U, 0U, 0U);
 #else
     commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);
@@ -1176,7 +1176,7 @@ static auto CreateVertexBufferForPresentation(ID3D12Device* d3d_device, ID3D12Ro
     return std::make_pair(uploadDevHostBuffer, vertexBuffer);
 }
 
-static auto PopulateCommandList(ID3D12Device* d3d_device, ID3D12GraphicsCommandList* commandBundle, ID3D12GraphicsCommandList* commandList, ID3D12DescriptorHeap* rtvDescriptorHeap, ID3D12DescriptorHeap* dsvDescriptorHeap,
+static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12GraphicsCommandList* commandList, ID3D12DescriptorHeap* rtvDescriptorHeap, ID3D12DescriptorHeap* dsvDescriptorHeap,
                                 ID3D12DescriptorHeap* cbv_uavDescriptorHeap, ID3D12Resource* renderTarget, ID3D12Resource* dsTexture, ID3D12Resource* uavBuffer, ID3D12Resource* readbackDevHostBuffer) -> bool
 {
     // Record commands to the command list
@@ -1344,7 +1344,7 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     {
         if (!ResetCommandAllocatorAndList(commandAllocator, commandList, pipelineState)) break;
 
-        if (!PopulateCommandList(d3d_device, commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, cbv_uavDescriptorHeap, rtTexture, dsTexture, uavBuffer, readbackDevHostBuffer)) break;
+        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, cbv_uavDescriptorHeap, rtTexture, dsTexture, uavBuffer, readbackDevHostBuffer)) break;
 
         // Execute the command list.
         ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)commandList };
