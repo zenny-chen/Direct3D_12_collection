@@ -1,13 +1,15 @@
 #include "common.h"
-
+#include <array>
 
 #define TEST_UNCERTAINTY_REGION     0
 #define TEST_EARLY_DEPTH_CULLING    0
+#define TEST_VARIABLE_SHADING_RATE  1
 #define BIND_DEPTH_STENCIL_AS_SRV   0
+#define TEST_PRIMITIVE_POINT        0
 
 static constexpr D3D12_FILL_MODE USE_FILL_MODE = D3D12_FILL_MODE_SOLID;
-static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
-static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = TEST_PRIMITIVE_POINT  != 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 
 // DO NOT configure this constant
 static constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY_TYPE = []() constexpr -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
@@ -87,7 +89,7 @@ static auto CreateRootSignature(ID3D12Device* d3d_device, bool isForRenderTextur
                 .pDescriptorRanges = &descRanges[2]
             },
             // This unordered access view buffer will just be accessed in a pixel shader
-            .ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
+            .ShaderVisibility =  D3D12_SHADER_VISIBILITY_PIXEL
         },
         // b1 (for render target texture rendering)
         {
@@ -696,11 +698,20 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
 static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12RootSignature* rootSignature, ID3D12CommandQueue *commandQueue, ID3D12GraphicsCommandList* commandList,
                                             ID3D12GraphicsCommandList* commandBundleList, ID3D12PipelineState* linePipelineState, ID3D12DescriptorHeap* cbv_uavDescriptorHeap) -> std::tuple<ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
 {
+#if TEST_PRIMITIVE_POINT
+    struct Vertex
+    {
+        float position[4];
+        float color[4];
+    } triangleVertices[256]
+#else
     const struct Vertex
     {
         float position[4];
         float color[4];
-    } triangleVertices[]{
+    } triangleVertices[]
+#endif
+    {
         // Direct3D是以左手作为前面背面顶点排列的依据
 #if TEST_UNCERTAINTY_REGION
         {.position { 0.0f / 32.0f + 1.0f / (32.0f * 256.0f), 4.0f / 32.0f, 0.0f, 1.0f}, .color {0.9f, 0.1f, 0.1f, 1.0f}},   // top
@@ -728,18 +739,53 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
         {.position { 0.5f + 1.0f / 16.0f, -1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.9f, 0.1f, 1.0f}}, // bottom line left point
         {.position { 0.75f, -1.0f / 32.0f, 0.0f, 1.0f}, .color {0.1f, 0.9f, 0.1f, 1.0f}},               // bottom line right point
+#elif TEST_VARIABLE_SHADING_RATE
+        {.position { -0.25f, 0.25f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },  // top left
+        {.position { 0.25f, 0.25f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },   // top right
+        {.position { -0.25f, -0.25f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }, // bottom left
+        {.position { 0.25f, -0.25f, 0.0f, 1.0f }, .color { 0.9f, 0.9f, 0.1f, 1.0f } }   // bottom right
 #else
 #if TEST_EARLY_DEPTH_CULLING
         {.position { 0.0f, 0.5f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },     // top center
         {.position { 0.7f, -0.5f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } },    // bottom right
         {.position { -0.7f, -0.5f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },   // bottom left
 #endif // TEST_EARLY_DEPTH_CULLING
-
         {.position { 0.0f, 0.75f, 0.0f, 1.0f }, .color { 0.9f, 0.1f, 0.1f, 1.0f } },    // top center
         {.position { 0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.9f, 0.1f, 1.0f } },  // bottom right
         {.position { -0.75f, -0.75f, 0.0f, 1.0f }, .color { 0.1f, 0.1f, 0.9f, 1.0f } }  // bottom left
 #endif
     };
+
+#if TEST_PRIMITIVE_POINT
+    const float pointColors[4 * 4] = {
+        0.9f, 0.1f, 0.1f, 1.0f,     // pixel 0
+        0.1f, 0.9f, 0.1f, 1.0f,     // pixel 1
+        0.1f, 0.1f, 0.9f, 1.0f,     // pixel 2
+        0.9f, 0.9f, 0.1f, 1.0f      // pixel 3
+    };
+    constexpr int regionSize = TEXTURE_SAMPLE_COUNT == 1U ? 16 : 8;
+    constexpr float widthPerPixel = 2.0f / float(TEXTURE_SIZE);
+
+    for (int y = 0; y < regionSize; ++y)
+    {
+        const float yCoord = -0.25f +  float(y) * (1.0f / 32.0f);
+        const int pointColorYIndex = y & 3;
+
+        for (int x = 0; x < regionSize; ++x)
+        {
+            const float xCoord = -0.25f + float(x) * (1.0f / 32.0f);
+            const int pointColorXIndex = ((pointColorYIndex + x) & 3) * 4;
+            int index = y * regionSize + x;
+            
+            triangleVertices[index].position[0] = xCoord;
+            triangleVertices[index].position[1] = yCoord;
+            triangleVertices[index].position[2] = 0.0f;
+            triangleVertices[index].position[3] = 1.0f;
+
+            memcpy(triangleVertices[index].color, &pointColors[pointColorXIndex], sizeof(triangleVertices[index].color));
+        }
+    }
+#endif
 
     const D3D12_HEAP_PROPERTIES defaultHeapProperties{
         .Type = D3D12_HEAP_TYPE_DEFAULT,    // default heap type for device visible memory
@@ -884,17 +930,6 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     hRes = uploadDevHostBuffer->Map(0, nullptr, &hostMemPtr);
     if (FAILED(hRes))
     {
-        fprintf(stderr, "Map unordered access buffer failed: %ld\n", hRes);
-        return result;
-    }
-    memset(hostMemPtr, 0, uavBufferSize);
-    uploadDevHostBuffer->Unmap(0, nullptr);
-
-    WriteToDeviceResourceAndSync(commandList, uavBuffer, uploadDevHostBuffer, 0U, 0U, uavBufferSize);
-
-    hRes = uploadDevHostBuffer->Map(0, nullptr, &hostMemPtr);
-    if (FAILED(hRes))
-    {
         fprintf(stderr, "Map vertex buffer failed: %ld\n", hRes);
         return result;
     }
@@ -956,10 +991,13 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     commandBundleList->IASetPrimitiveTopology(RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY);
     commandBundleList->IASetVertexBuffers(0, 1, &vertexBufferView);
 
+#if TEST_VARIABLE_SHADING_RATE
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
-    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
-
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
+    commandBundleList->DrawInstanced((UINT)std::size(triangleVertices), 1U, 0U, 0U);
+#else
     commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);
+#endif
 
 #if TEST_EARLY_DEPTH_CULLING
     commandBundleList->SetGraphicsRoot32BitConstant(2U, 1U, 0U);                // rootParameters[2]
@@ -1138,8 +1176,8 @@ static auto CreateVertexBufferForPresentation(ID3D12Device* d3d_device, ID3D12Ro
     return std::make_pair(uploadDevHostBuffer, vertexBuffer);
 }
 
-static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12GraphicsCommandList* commandList, ID3D12DescriptorHeap* rtvDescriptorHeap, ID3D12DescriptorHeap* dsvDescriptorHeap, ID3D12DescriptorHeap *uavDescriptorHeap,
-                                ID3D12Resource* renderTarget, ID3D12Resource* dsTexture, ID3D12Resource* uavBuffer, ID3D12Resource* readbackDevHostBuffer) -> bool
+static auto PopulateCommandList(ID3D12Device* d3d_device, ID3D12GraphicsCommandList* commandBundle, ID3D12GraphicsCommandList* commandList, ID3D12DescriptorHeap* rtvDescriptorHeap, ID3D12DescriptorHeap* dsvDescriptorHeap,
+                                ID3D12DescriptorHeap* cbv_uavDescriptorHeap, ID3D12Resource* renderTarget, ID3D12Resource* dsTexture, ID3D12Resource* uavBuffer, ID3D12Resource* readbackDevHostBuffer) -> bool
 {
     // Record commands to the command list
     // Set necessary state.
@@ -1206,7 +1244,7 @@ static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12
         commandList->ClearDepthStencilView(dsvHandle, D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
     }
 
-    ID3D12DescriptorHeap* const descHeaps[]{ uavDescriptorHeap };
+    ID3D12DescriptorHeap* const descHeaps[]{ cbv_uavDescriptorHeap };
     commandList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
 
     // Execute the bundle to the command list
@@ -1306,7 +1344,7 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     {
         if (!ResetCommandAllocatorAndList(commandAllocator, commandList, pipelineState)) break;
 
-        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, cbv_uavDescriptorHeap, rtTexture, dsTexture, uavBuffer, readbackDevHostBuffer)) break;
+        if (!PopulateCommandList(d3d_device, commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, cbv_uavDescriptorHeap, rtTexture, dsTexture, uavBuffer, readbackDevHostBuffer)) break;
 
         // Execute the command list.
         ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)commandList };
