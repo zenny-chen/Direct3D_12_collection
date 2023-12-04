@@ -4,7 +4,7 @@ struct PSInput
     float4 color : COLOR;
 };
 
-float4 PSMain(PSInput input, uint shadingRate : SV_ShadingRate, uint sampleIndex : SV_SampleIndex) : SV_TARGET
+float4 PSMain(PSInput input, uint shadingRate : SV_ShadingRate) : SV_TARGET
 {
     enum D3D12_SHADING_RATE
     {
