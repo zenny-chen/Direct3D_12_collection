@@ -3,7 +3,7 @@
 
 #define TEST_UNCERTAINTY_REGION     0
 #define TEST_EARLY_DEPTH_CULLING    0
-#define TEST_VARIABLE_SHADING_RATE  1
+#define TEST_VARIABLE_SHADING_RATE  0
 #define BIND_DEPTH_STENCIL_AS_SRV   0
 #define TEST_PRIMITIVE_POINT        0
 
@@ -26,8 +26,9 @@ static constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE RENDER_TEXTURE_USE_PRIMITIVE_TOPO
 }();
 
 static constexpr UINT TEXTURE_SIZE = WINDOW_WIDTH / 8;
-static constexpr UINT TEXTURE_SAMPLE_COUNT = 1U;
-constexpr UINT uavBufferSize = 16U;
+static constexpr UINT TEXTURE_SAMPLE_COUNT = 4U;
+static constexpr UINT uavBufferSize = 16U;
+static constexpr bool MSAA_RENDER_TARGET_NEED_RESOLVE = true && TEXTURE_SAMPLE_COUNT > 1U;
 
 static auto CreateRootSignature(ID3D12Device* d3d_device, bool isForRenderTexture) -> ID3D12RootSignature*
 {
@@ -149,15 +150,17 @@ static auto CreateRootSignature(ID3D12Device* d3d_device, bool isForRenderTextur
     return rootSignature;
 }
 
-// @return [rtvDescriptorHeap, dsvDescriptorHeap, rtTexture, dsTexture]
-static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::tuple<ID3D12DescriptorHeap*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*>
+// @return [rtvDescriptorHeap, dsvDescriptorHeap, rtTexture, dsTexture, resolvedRTTexture, resolvedDSTexutre]
+static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::tuple<ID3D12DescriptorHeap*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
 {
     ID3D12DescriptorHeap* rtvDescriptorHeap = nullptr;
     ID3D12DescriptorHeap* dsvDescriptorHeap = nullptr;
     ID3D12Resource* rtTexture = nullptr;
     ID3D12Resource* dsTexture = nullptr;
+    ID3D12Resource* resolvedRTTexture = nullptr;
+    ID3D12Resource* resolvedDSTexutre = nullptr;
 
-    auto result = std::make_tuple(rtvDescriptorHeap, dsvDescriptorHeap, rtTexture, dsTexture);
+    auto result = std::make_tuple(rtvDescriptorHeap, dsvDescriptorHeap, rtTexture, dsTexture, resolvedRTTexture, resolvedDSTexutre);
 
     // Describe and create a render target view (RTV) descriptor heap.
     const D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc{
@@ -210,6 +213,19 @@ static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::t
         .Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
     };
 
+    const D3D12_RESOURCE_DESC rtResolveResourceDesc{
+        .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+        .Alignment = 0,
+        .Width = TEXTURE_SIZE,
+        .Height = TEXTURE_SIZE,
+        .DepthOrArraySize = 1,
+        .MipLevels = 1,
+        .Format = RENDER_TARGET_BUFFER_FOMRAT,
+        .SampleDesc {.Count = 1U, .Quality = 0U },
+        .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+        .Flags = D3D12_RESOURCE_FLAG_NONE
+    };
+
     const D3D12_CLEAR_VALUE rtOptClearValue{
         .Format = RENDER_TARGET_BUFFER_FOMRAT,
         .Color { 0.5f, 0.6f, 0.5f, 1.0f }
@@ -224,12 +240,21 @@ static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::t
     // Create frame resources
     do
     {
-        // Create the RTV texture
+        // Create the MSAA RTV texture
         hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &rtResourceDesc, D3D12_RESOURCE_STATE_RESOLVE_SOURCE,
                                                 &rtOptClearValue, IID_PPV_ARGS(&rtTexture));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateCommittedResource for texture render target failed: %ld!\n", hRes);
+            break;
+        }
+
+        // Create the resolved RT texture
+        hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &rtResolveResourceDesc, D3D12_RESOURCE_STATE_COMMON,
+                                                    nullptr, IID_PPV_ARGS(&resolvedRTTexture));
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "CreateCommittedResource for resolved texture render target failed: %ld!\n", hRes);
             break;
         }
 
@@ -254,6 +279,19 @@ static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::t
             .Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
         };
 
+        const D3D12_RESOURCE_DESC dsResolveResourceDesc{
+            .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            .Alignment = 0,
+            .Width = TEXTURE_SIZE,
+            .Height = TEXTURE_SIZE,
+            .DepthOrArraySize = 1,
+            .MipLevels = 1,
+            .Format = DXGI_FORMAT_D32_FLOAT,
+            .SampleDesc {.Count = 1U, .Quality = 0U },
+            .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            .Flags = D3D12_RESOURCE_FLAG_NONE
+        };
+
         const D3D12_CLEAR_VALUE dsOptClearValue{
             .Format = DXGI_FORMAT_D32_FLOAT,
             .DepthStencil { .Depth = 1.0f, .Stencil = 0U }
@@ -261,6 +299,14 @@ static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::t
 
         hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &dsResourceDesc, D3D12_RESOURCE_STATE_DEPTH_READ,
                                                     &dsOptClearValue, IID_PPV_ARGS(&dsTexture));
+        if (FAILED(hRes))
+        {
+            fprintf(stderr, "CreateCommittedResource for texture render target failed: %ld!\n", hRes);
+            break;
+        }
+
+        hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &dsResolveResourceDesc, D3D12_RESOURCE_STATE_COMMON,
+                                                    nullptr, IID_PPV_ARGS(&resolvedDSTexutre));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateCommittedResource for texture render target failed: %ld!\n", hRes);
@@ -282,7 +328,7 @@ static auto CreateRenderTargetViewForTexture(ID3D12Device* d3d_device) -> std::t
 
 #endif
 
-        return std::make_tuple(rtvDescriptorHeap, dsvDescriptorHeap, rtTexture, dsTexture);
+        return std::make_tuple(rtvDescriptorHeap, dsvDescriptorHeap, rtTexture, dsTexture, resolvedRTTexture, resolvedDSTexutre);
     }
     while (false);
 
@@ -763,7 +809,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         0.1f, 0.1f, 0.9f, 1.0f,     // pixel 2
         0.9f, 0.9f, 0.1f, 1.0f      // pixel 3
     };
-    constexpr int regionSize = TEXTURE_SAMPLE_COUNT == 1U ? 16 : 8;
+    constexpr int regionSize = 16;
     constexpr float widthPerPixel = 2.0f / float(TEXTURE_SIZE);
 
     for (int y = 0; y < regionSize; ++y)
@@ -993,7 +1039,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
 #if TEST_VARIABLE_SHADING_RATE
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
-    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X2, combiners);
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
     commandBundleList->DrawInstanced((UINT)std::size(triangleVertices), 1U, 0U, 0U);
 #else
     commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);
@@ -1177,7 +1223,7 @@ static auto CreateVertexBufferForPresentation(ID3D12Device* d3d_device, ID3D12Ro
 }
 
 static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12GraphicsCommandList* commandList, ID3D12DescriptorHeap* rtvDescriptorHeap, ID3D12DescriptorHeap* dsvDescriptorHeap,
-                                ID3D12DescriptorHeap* cbv_uavDescriptorHeap, ID3D12Resource* renderTarget, ID3D12Resource* dsTexture, ID3D12Resource* uavBuffer, ID3D12Resource* readbackDevHostBuffer) -> bool
+                                ID3D12DescriptorHeap* cbv_uavDescriptorHeap, ID3D12Resource* renderTarget, ID3D12Resource* dsTexture, ID3D12Resource* resolvedRTTexture, ID3D12Resource* resolvedDSTexture, ID3D12Resource* uavBuffer, ID3D12Resource* readbackDevHostBuffer) -> bool
 {
     // Record commands to the command list
     // Set necessary state.
@@ -1202,8 +1248,7 @@ static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12
     };
     commandList->RSSetScissorRects(1, &scissorRect);
 
-    // Indicate that the back buffer will be used as a render target.
-    const D3D12_RESOURCE_BARRIER renderBarriers[] {
+    const D3D12_RESOURCE_BARRIER renderBarriers[]{
         // render target state transition
         {
             .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -1250,32 +1295,117 @@ static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12
     // Execute the bundle to the command list
     commandList->ExecuteBundle(commandBundle);
 
-    // Indicate that the back buffer will now be used to present.
-    const D3D12_RESOURCE_BARRIER storeBarriers[] {
-        // render target state transition
-        {
-            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-            .Transition {
-                .pResource = renderTarget,
-                .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
-                .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+    // Make the render target as shader resource view, or resolve the render target to the destniation resolved texture
+    if (MSAA_RENDER_TARGET_NEED_RESOLVE)
+    {
+        const D3D12_RESOURCE_BARRIER storeBarriers[]{
+            // render target state transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = renderTarget,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_SOURCE
+                }
+            },
+            // resovled render target texture transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = resolvedRTTexture,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_COMMON,
+                    .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST
+                }
+            },
+            // depth stencil state transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = dsTexture,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                    .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_SOURCE
+                }
+            },
+            // resolved depth stencil texture transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = resolvedDSTexture,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_COMMON,
+                    .StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST
+                }
             }
-        },
-        // depth stencil state transition
-        {
-            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-            .Transition {
-                .pResource = dsTexture,
-                .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                .StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-            }
+        };
+        commandList->ResourceBarrier((UINT)std::size(storeBarriers) - UINT(dsTexture == nullptr) * 2U, storeBarriers);
+
+        // Resolve MSAA render target and depth stencil texture to resovled textures
+        commandList->ResolveSubresource(resolvedRTTexture, 0, renderTarget, 0, RENDER_TARGET_BUFFER_FOMRAT);
+        if (dsTexture != nullptr && resolvedDSTexture != nullptr) {
+            commandList->ResolveSubresource(resolvedDSTexture, 0, dsTexture, 0, DXGI_FORMAT_R32_FLOAT);
         }
-    };
-    commandList->ResourceBarrier((UINT)std::size(storeBarriers) - UINT(dsTexture == nullptr), storeBarriers);
+
+        const D3D12_RESOURCE_BARRIER resolvedBarriers[]{
+            // resovled render target texture transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = resolvedRTTexture,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                    .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+                }
+            },
+            // resolved depth stencil texture transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = resolvedDSTexture,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_RESOLVE_DEST,
+                    .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+                }
+            }
+        };
+        commandList->ResourceBarrier((UINT)std::size(resolvedBarriers) - UINT(dsTexture == nullptr) * 2U, resolvedBarriers);
+    }
+    else
+    {
+        const D3D12_RESOURCE_BARRIER storeBarriers[]{
+            // render target state transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = renderTarget,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET,
+                    .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+                }
+            },
+            // depth stencil state transition
+            {
+                .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+                .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+                .Transition {
+                    .pResource = dsTexture,
+                    .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                    .StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                    .StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+                }
+            }
+        };
+        commandList->ResourceBarrier((UINT)std::size(storeBarriers) - UINT(dsTexture == nullptr), storeBarriers);
+    }
 
     SyncAndReadFromDeviceResource(commandList, uavBufferSize, readbackDevHostBuffer, uavBuffer);
 
@@ -1304,6 +1434,8 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     ID3D12Resource* vertexBuffer = nullptr;
     ID3D12Resource* rtTexture = nullptr;
     ID3D12Resource* dsTexture = nullptr;
+    ID3D12Resource* resolvedRTTexture = nullptr;
+    ID3D12Resource* resolvedDSTexture = nullptr;
     ID3D12Resource* constantBuffer = nullptr;
     ID3D12Resource* uavBuffer = nullptr;
     ID3D12Resource* readbackDevHostBuffer = nullptr;
@@ -1320,6 +1452,8 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     dsvDescriptorHeap = std::get<1>(rtTexRes);
     rtTexture = std::get<2>(rtTexRes);
     dsTexture = std::get<3>(rtTexRes);
+    resolvedRTTexture = std::get<4>(rtTexRes);
+    resolvedDSTexture = std::get<5>(rtTexRes);
 
     auto const pipelineResult = CreatePipelineStateObjectForRenderTexture(d3d_device, commandAllocator, commandBundleAllocator, rootSignature);
     pipelineState = std::get<0>(pipelineResult);
@@ -1344,7 +1478,7 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     {
         if (!ResetCommandAllocatorAndList(commandAllocator, commandList, pipelineState)) break;
 
-        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, cbv_uavDescriptorHeap, rtTexture, dsTexture, uavBuffer, readbackDevHostBuffer)) break;
+        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, dsvDescriptorHeap, cbv_uavDescriptorHeap, rtTexture, dsTexture, resolvedRTTexture, resolvedDSTexture, uavBuffer, readbackDevHostBuffer)) break;
 
         // Execute the command list.
         ID3D12CommandList* const ppCommandLists[] = { (ID3D12CommandList*)commandList };
@@ -1387,6 +1521,26 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     constantBuffer->Release();
     uavBuffer->Release();
     readbackDevHostBuffer->Release();
+
+    if (MSAA_RENDER_TARGET_NEED_RESOLVE)
+    {
+        rtTexture->Release();
+        if (dsTexture != nullptr) {
+            dsTexture->Release();
+        }
+
+        rtTexture = resolvedRTTexture;
+        dsTexture = resolvedDSTexture;
+    }
+    else
+    {
+        if (resolvedRTTexture != nullptr) {
+            resolvedRTTexture->Release();
+        }
+        if (resolvedDSTexture != nullptr) {
+            resolvedDSTexture->Release();
+        }
+    }
     
     commandList->Release();
     commandList = nullptr;

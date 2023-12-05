@@ -11,7 +11,7 @@ RWBuffer<uint> uavOutput : register(u0, space0);
 
 [earlydepthstencil]
 // The `linear` interpolation will not apply!
-float4 PSMain(PSInput input, /*uint sampleIndex : SV_SampleIndex,*/ uint shadingRate : SV_ShadingRate
+float4 PSMain(PSInput input, uint sampleIndex : SV_SampleIndex, uint shadingRate : SV_ShadingRate
 #if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
     , linear uint innerCoverage : SV_InnerCoverage
 #endif
@@ -57,7 +57,18 @@ float4 PSMain(PSInput input, /*uint sampleIndex : SV_SampleIndex,*/ uint shading
         }
     }
 
-    //if(sampleIndex == 3) return float4(0.9f, 0.9f, 0.9, 1.0f);
+    switch (sampleIndex)
+    {
+    case 0:
+    default:
+        return float4(0.9f, 0.1f, 0.1f, 1.0f);
+    case 1:
+        return float4(0.1f, 0.9f, 0.1f, 1.0f);
+    case 2:
+        return float4(0.1f, 0.1f, 0.9f, 1.0f);
+    case 3:
+        return float4(0.9f, 0.9f, 0.1f, 1.0f);
+    }
 
     return inputColor;
 }
