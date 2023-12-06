@@ -2,7 +2,7 @@
 
 struct PSInput
 {
-    float4 position : SV_POSITION;
+    linear centroid float4 position : SV_POSITION;
     linear centroid float4 color : COLOR;
     //sample float4 color : COLOR;
 };
@@ -11,7 +11,8 @@ RWBuffer<uint> uavOutput : register(u0, space0);
 
 [earlydepthstencil]
 // The `linear` interpolation will not apply!
-float4 PSMain(PSInput input, uint sampleIndex : SV_SampleIndex, uint shadingRate : SV_ShadingRate
+float4 PSMain(PSInput input
+    //, uint sampleIndex : SV_SampleIndex, uint shadingRate : SV_ShadingRate * /
 #if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
     , linear uint innerCoverage : SV_InnerCoverage
 #endif
@@ -26,7 +27,7 @@ float4 PSMain(PSInput input, uint sampleIndex : SV_SampleIndex, uint shadingRate
         return float4(1.0f - inputColor.r, 1.0f - inputColor.g, 1.0f - inputColor.b, 1.0f);
     }
 #endif
-
+    /**
     if (int(input.position.x) == 32 && int(input.position.y) == 31)
     {
         enum D3D12_SHADING_RATE
@@ -68,6 +69,11 @@ float4 PSMain(PSInput input, uint sampleIndex : SV_SampleIndex, uint shadingRate
         return float4(0.1f, 0.1f, 0.9f, 1.0f);
     case 3:
         return float4(0.9f, 0.9f, 0.1f, 1.0f);
+    }
+    */
+
+    if (frac(input.position.x) != 0.5f || frac(input.position.y) != 0.5f) {
+        return float4(0.9f, 0.9f, 0.9f, 1.0f);
     }
 
     return inputColor;

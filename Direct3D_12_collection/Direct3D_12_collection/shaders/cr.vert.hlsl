@@ -33,7 +33,7 @@
 
 struct PSInput
 {
-    float4 position : SV_POSITION;
+    linear centroid float4 position : SV_POSITION;
     linear centroid float4 color : COLOR;
     //sample float4 color : COLOR;
 };
