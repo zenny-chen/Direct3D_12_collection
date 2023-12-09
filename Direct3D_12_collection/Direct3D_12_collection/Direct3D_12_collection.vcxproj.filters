@@ -95,6 +95,9 @@
     <FxCompile Include="shaders\proj_test.vs.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
+    <FxCompile Include="shaders\cr.comp.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">

@@ -30,7 +30,11 @@ float4 PSMain(PSInput input) : SV_TARGET
 #endif
 
 #if USE_DEPTH_STENCIL
-    dstColor = clamp((1.0f - dstColor) * 10.0f, 0.0f, 1.0f);
+    if (dstColor < 0.0f) return float4(0.1f, 0.1f, 0.1f, 1.0f);
+    if (dstColor > 1.0f) return float4(0.9f, 0.9f, 0.9f, 1.0f);
+    if (dstColor == 1.0f) return float4(0.5f, 0.5f, 0.5f, 1.0f);
+
+    dstColor = 1.0f - dstColor;
     return float4(dstColor, 0.1f, 1.0f - dstColor, 1.0f);
 #else
     return dstColor;

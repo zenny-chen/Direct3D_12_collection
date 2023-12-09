@@ -12,6 +12,7 @@ set cmd="C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\dxc.exe"
 %cmd%  -T ps_6_5  -E PSMain  -Fo vrs.frag.cso  vrs.frag.hlsl
 %cmd%  -T ps_6_5  -E PSMain  -Fo cr.frag.cso  cr.frag.hlsl
 %cmd%  -T ps_6_5  -E PSMain  -Fo cr_present.frag.cso  cr_present.frag.hlsl
+%cmd%  -T cs_6_5  -E CSMain  -Fo cr.comp.cso  cr.comp.hlsl
 %cmd%  -T as_6_5  -E AmplificationMain  -Fo ms.amplification.cso  -Fc ms.amplification.asm  ms.amplification.hlsl
 %cmd%  -T ms_6_5  -E MeshMain  -Fo ms.mesh.cso  -Fc ms.mesh.asm  ms.mesh.hlsl
 %cmd%  -T ms_6_5  -E MeshMain  -Fo msonly.mesh.cso  msonly.mesh.hlsl

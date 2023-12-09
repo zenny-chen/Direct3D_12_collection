@@ -1,4 +1,5 @@
 #define ENABLE_CONSERVATIVE_RASTERIZATION_MODE  0
+#define ENABLE_SAMPLE_INTERPOLATION             0
 
 struct PSInput
 {
@@ -10,15 +11,20 @@ struct PSInput
 RWBuffer<uint> uavOutput : register(u0, space0);
 
 [earlydepthstencil]
-// The `linear` interpolation will not apply!
-float4 PSMain(PSInput input
-    //, uint sampleIndex : SV_SampleIndex, uint shadingRate : SV_ShadingRate * /
+float4 PSMain(PSInput input, out float outDepth : SV_Depth,
+    uint shadingRate : SV_ShadingRate
 #if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
+    // The `linear` interpolation will not apply!
     , linear uint innerCoverage : SV_InnerCoverage
 #endif
-) : SV_TARGET
+#if ENABLE_SAMPLE_INTERPOLATION
+    , uint sampleIndex : SV_SampleIndex
+#endif
+            ) : SV_TARGET
 {
     InterlockedAdd(uavOutput[0], 1U);
+
+    outDepth = 1.5f;
 
     const float4 inputColor = input.color;
 
@@ -27,7 +33,7 @@ float4 PSMain(PSInput input
         return float4(1.0f - inputColor.r, 1.0f - inputColor.g, 1.0f - inputColor.b, 1.0f);
     }
 #endif
-    /**
+
     if (int(input.position.x) == 32 && int(input.position.y) == 31)
     {
         enum D3D12_SHADING_RATE
@@ -58,6 +64,7 @@ float4 PSMain(PSInput input
         }
     }
 
+#if ENABLE_SAMPLE_INTERPOLATION
     switch (sampleIndex)
     {
     case 0:
@@ -70,7 +77,7 @@ float4 PSMain(PSInput input
     case 3:
         return float4(0.9f, 0.9f, 0.1f, 1.0f);
     }
-    */
+#endif
 
     if (frac(input.position.x) != 0.5f || frac(input.position.y) != 0.5f) {
         return float4(0.9f, 0.9f, 0.9f, 1.0f);
