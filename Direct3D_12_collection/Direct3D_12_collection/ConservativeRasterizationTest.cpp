@@ -28,8 +28,8 @@ static constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE RENDER_TEXTURE_USE_PRIMITIVE_TOPO
 
 static constexpr UINT TEXTURE_SIZE = WINDOW_WIDTH / 8;
 static constexpr UINT TEXTURE_SAMPLE_COUNT = 4U;
-static constexpr UINT uavBufferSize = 16U;
 static constexpr bool MSAA_RENDER_TARGET_NEED_RESOLVE = true && TEXTURE_SAMPLE_COUNT > 1U;
+static constexpr UINT uavBufferSize = 16U;
 
 enum CBV_SRV_UAV_SLOT_ID
 {
@@ -1083,7 +1083,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
 #if TEST_VARIABLE_SHADING_RATE
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
-    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
     commandBundleList->DrawInstanced((UINT)std::size(triangleVertices), 1U, 0U, 0U);
 #else
     commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);

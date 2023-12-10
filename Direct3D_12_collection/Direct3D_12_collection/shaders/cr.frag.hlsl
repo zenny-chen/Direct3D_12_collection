@@ -11,7 +11,7 @@ struct PSInput
 RWBuffer<uint> uavOutput : register(u0, space0);
 
 [earlydepthstencil]
-float4 PSMain(PSInput input, out float outDepth : SV_Depth,
+float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outputCoverage : SV_Coverage, //out float outDepth : SV_Depth,
     uint shadingRate : SV_ShadingRate
 #if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
     // The `linear` interpolation will not apply!
@@ -20,11 +20,13 @@ float4 PSMain(PSInput input, out float outDepth : SV_Depth,
 #if ENABLE_SAMPLE_INTERPOLATION
     , uint sampleIndex : SV_SampleIndex
 #endif
-            ) : SV_TARGET
+) : SV_TARGET
 {
     InterlockedAdd(uavOutput[0], 1U);
+    //uavOutput[0] = inputCoverage;
 
-    outDepth = 1.5f;
+    outputCoverage = inputCoverage;
+    //outDepth = 1.5f;
 
     const float4 inputColor = input.color;
 
@@ -80,7 +82,7 @@ float4 PSMain(PSInput input, out float outDepth : SV_Depth,
 #endif
 
     if (frac(input.position.x) != 0.5f || frac(input.position.y) != 0.5f) {
-        return float4(0.9f, 0.9f, 0.9f, 1.0f);
+        //return float4(0.9f, 0.9f, 0.9f, 1.0f);
     }
 
     return inputColor;
