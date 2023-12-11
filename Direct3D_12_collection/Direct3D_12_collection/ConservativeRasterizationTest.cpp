@@ -1083,7 +1083,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
 #if TEST_VARIABLE_SHADING_RATE
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
-    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
     commandBundleList->DrawInstanced((UINT)std::size(triangleVertices), 1U, 0U, 0U);
 #else
     commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);
@@ -1680,7 +1680,7 @@ static auto PopulateComputeCommandList(ID3D12Device* d3d_device, ID3D12PipelineS
     commandBundle->SetComputeRootSignature(computeRootSignature);
     commandBundle->SetComputeRootDescriptorTable(0, srvGPUDescHandle);
     commandBundle->SetComputeRootDescriptorTable(1, uavGPUDescHandle);
-    commandBundle->SetComputeRoot32BitConstant(2U, 0U, 0U);   // Set sample index
+    commandBundle->SetComputeRoot32BitConstant(2U, 2U, 0U);   // Set sample index
     commandBundle->Dispatch(TEXTURE_SIZE / 16U, TEXTURE_SIZE / 16U, 1U);
 
     auto hRes = commandBundle->Close();

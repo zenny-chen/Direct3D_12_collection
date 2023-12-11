@@ -22,17 +22,36 @@ float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outpu
 #endif
 ) : SV_TARGET
 {
+    float4 inputColor = input.color;
+
     InterlockedAdd(uavOutput[0], 1U);
     //uavOutput[0] = inputCoverage;
 
     outputCoverage = inputCoverage;
     //outDepth = 1.5f;
 
-    const float4 inputColor = input.color;
-
 #if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
     if (innerCoverage == 0U) {
         return float4(1.0f - inputColor.r, 1.0f - inputColor.g, 1.0f - inputColor.b, 1.0f);
+    }
+#endif
+
+#if ENABLE_SAMPLE_INTERPOLATION
+    switch (sampleIndex)
+    {
+    case 0:
+    default:
+        inputColor = float4(0.9f, 0.1f, 0.1f, 1.0f);
+        break;
+    case 1:
+        inputColor = float4(0.1f, 0.9f, 0.1f, 1.0f);
+        break;
+    case 2:
+        inputColor = float4(0.1f, 0.1f, 0.9f, 1.0f);
+        break;
+    case 3:
+        inputColor = float4(0.9f, 0.9f, 0.1f, 1.0f);
+        break;
     }
 #endif
 
@@ -66,20 +85,10 @@ float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outpu
         }
     }
 
-#if ENABLE_SAMPLE_INTERPOLATION
-    switch (sampleIndex)
-    {
-    case 0:
-    default:
-        return float4(0.9f, 0.1f, 0.1f, 1.0f);
-    case 1:
-        return float4(0.1f, 0.9f, 0.1f, 1.0f);
-    case 2:
-        return float4(0.1f, 0.1f, 0.9f, 1.0f);
-    case 3:
-        return float4(0.9f, 0.9f, 0.1f, 1.0f);
+    if (int(input.position.x) == 32 - 8 && int(input.position.y) == 31 - 7) {
+        //uavOutput[0] = uint(EvaluateAttributeSnapped(input.color.r, int2(-8, -8)) * 100.0f);
+        //inputColor = float4(0.9f, 0.9f, 0.1f, 1.0f);
     }
-#endif
 
     if (frac(input.position.x) != 0.5f || frac(input.position.y) != 0.5f) {
         //return float4(0.9f, 0.9f, 0.9f, 1.0f);
