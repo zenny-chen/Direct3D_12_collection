@@ -1,5 +1,4 @@
 #include "common.h"
-#include <array>
 
 #define TEST_UNCERTAINTY_REGION     0
 #define TEST_EARLY_DEPTH_CULLING    0
@@ -27,7 +26,7 @@ static constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE RENDER_TEXTURE_USE_PRIMITIVE_TOPO
 }();
 
 static constexpr UINT TEXTURE_SIZE = WINDOW_WIDTH / 8;
-static constexpr UINT TEXTURE_SAMPLE_COUNT = 4U;
+static constexpr UINT TEXTURE_SAMPLE_COUNT = 1U;
 static constexpr bool MSAA_RENDER_TARGET_NEED_RESOLVE = true && TEXTURE_SAMPLE_COUNT > 1U;
 static constexpr UINT uavBufferSize = 16U;
 
