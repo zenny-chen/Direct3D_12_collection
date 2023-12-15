@@ -65,31 +65,35 @@ auto WriteToDeviceResourceAndSync(
     size_t srcOffset,
     size_t dataSize) -> void
 {
-    const D3D12_RESOURCE_BARRIER beginCopyBarrier = {
-        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-        .Transition {
-            .pResource = pDestinationResource,
-            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            .StateBefore = D3D12_RESOURCE_STATE_COMMON,
-            .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST
+    const D3D12_RESOURCE_BARRIER beginCopyBarriers[] = {
+        {
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition {
+                .pResource = pDestinationResource,
+                .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                .StateBefore = D3D12_RESOURCE_STATE_COMMON,
+                .StateAfter = D3D12_RESOURCE_STATE_COPY_DEST
+            }
         }
     };
-    pCmdList->ResourceBarrier(1, &beginCopyBarrier);
+    pCmdList->ResourceBarrier(UINT(std::size(beginCopyBarriers)), beginCopyBarriers);
 
     pCmdList->CopyBufferRegion(pDestinationResource, UINT64(dstOffset), pIntermediate, UINT64(srcOffset), dataSize);
     
-    const D3D12_RESOURCE_BARRIER endCopyBarrier = {
-        .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-        .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
-        .Transition {
-            .pResource = pDestinationResource,
-            .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-            .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
-            .StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ
+    const D3D12_RESOURCE_BARRIER endCopyBarriers[] = {
+        {
+            .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            .Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE,
+            .Transition {
+                .pResource = pDestinationResource,
+                .Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                .StateBefore = D3D12_RESOURCE_STATE_COPY_DEST,
+                .StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ
+            }
         }
     };
-    pCmdList->ResourceBarrier(1, &endCopyBarrier);
+    pCmdList->ResourceBarrier(UINT(std::size(endCopyBarriers)), endCopyBarriers);
 }
 
 auto WriteToDeviceTextureAndSync(

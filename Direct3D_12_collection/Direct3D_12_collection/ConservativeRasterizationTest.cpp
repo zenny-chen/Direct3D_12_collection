@@ -8,7 +8,7 @@
 #define TEST_PRIMITIVE_POINT        0
 
 static constexpr D3D12_FILL_MODE USE_FILL_MODE = D3D12_FILL_MODE_SOLID;
-static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
+static constexpr D3D12_CONSERVATIVE_RASTERIZATION_MODE USE_CONSERVATIVE_RASTERIZATION_MODE = TEST_PRIMITIVE_POINT != 0 ? D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF : D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON;
 static constexpr D3D_PRIMITIVE_TOPOLOGY RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY = TEST_PRIMITIVE_POINT  != 0 ? D3D_PRIMITIVE_TOPOLOGY_POINTLIST : D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 
 // DO NOT configure this constant
@@ -28,7 +28,7 @@ static constexpr D3D12_PRIMITIVE_TOPOLOGY_TYPE RENDER_TEXTURE_USE_PRIMITIVE_TOPO
 static constexpr UINT TEXTURE_SIZE = WINDOW_WIDTH / 8;
 static constexpr UINT TEXTURE_SAMPLE_COUNT = 1U;
 static constexpr bool MSAA_RENDER_TARGET_NEED_RESOLVE = true && TEXTURE_SAMPLE_COUNT > 1U;
-static constexpr UINT uavBufferSize = 16U;
+static constexpr UINT uavBufferSize = 64U;
 
 enum CBV_SRV_UAV_SLOT_ID
 {
@@ -749,10 +749,10 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
     return std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
 }
 
-// @return [uploadDevHostBuffer, vertexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer, readBackTextureHostBuffer, uavCompOutBuffer]
+// @return [uploadDevHostBuffer, vertexBuffer, indexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer, readBackTextureHostBuffer, uavCompOutBuffer]
 static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12RootSignature* rootSignature, ID3D12CommandQueue *commandQueue, ID3D12GraphicsCommandList* commandList,
                                             ID3D12GraphicsCommandList* commandBundleList, ID3D12PipelineState* linePipelineState, ID3D12DescriptorHeap* cbv_uavDescriptorHeap) ->
-                                            std::tuple<ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
+                                            std::tuple<ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*>
 {
 #if TEST_PRIMITIVE_POINT
     struct Vertex
@@ -843,6 +843,8 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     }
 #endif
 
+    constexpr unsigned indexCount = 16;
+
     const D3D12_HEAP_PROPERTIES defaultHeapProperties{
         .Type = D3D12_HEAP_TYPE_DEFAULT,    // default heap type for device visible memory
         .CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
@@ -876,23 +878,37 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     ID3D12Resource* readbackDevHostBuffer = nullptr;
     ID3D12Resource* readBackTextureHostBuffer = nullptr;
     ID3D12Resource* vertexBuffer = nullptr;
+    ID3D12Resource* indexBuffer = nullptr;
     ID3D12Resource* constantBuffer = nullptr;
     ID3D12Resource* uavBuffer = nullptr;
     ID3D12Resource* uavCompOutBuffer = nullptr;
 
-    auto result = std::make_tuple(uploadDevHostBuffer, vertexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer, readBackTextureHostBuffer, uavCompOutBuffer);
+    auto result = std::make_tuple(uploadDevHostBuffer, vertexBuffer, indexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer, readBackTextureHostBuffer, uavCompOutBuffer);
 
     // Create vertexBuffer on GPU side.
     HRESULT hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &vbResourceDesc,
-        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&vertexBuffer));
+                                                    D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&vertexBuffer));
     if (FAILED(hRes))
     {
         fprintf(stderr, "CreateCommittedResource for vertex buffer failed: %ld\n", hRes);
         return result;
     }
 
+    // Create indexBuffer on GPU side.
+    D3D12_RESOURCE_DESC ibResourceDesc = vbResourceDesc;
+    ibResourceDesc.Width = indexCount * sizeof(unsigned);
+    hRes = d3d_device->CreateCommittedResource(&defaultHeapProperties, D3D12_HEAP_FLAG_NONE, &ibResourceDesc,
+                                                    D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&indexBuffer));
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "CreateCommittedResource for index buffer failed: %ld\n", hRes);
+        return result;
+    }
+
     // Create uploadDevHostBuffer with host visible for upload
-    hRes = d3d_device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &vbResourceDesc,
+    D3D12_RESOURCE_DESC uploadResourceDesc = vbResourceDesc;
+    uploadResourceDesc.Width += ibResourceDesc.Width + uavBufferSize;
+    hRes = d3d_device->CreateCommittedResource(&uploadHeapProperties, D3D12_HEAP_FLAG_NONE, &uploadResourceDesc,
                                             D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&uploadDevHostBuffer));
     if (FAILED(hRes))
     {
@@ -1022,10 +1038,23 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         return result;
     }
 
+    // Copy vertex data
     memcpy(hostMemPtr, triangleVertices, sizeof(triangleVertices));
+
+    // Assign index data
+    unsigned* pIndices = (unsigned*)(uintptr_t(hostMemPtr) + sizeof(triangleVertices));
+    for (unsigned i = 0U; i < indexCount; ++i) {
+        pIndices[i] = i;
+    }
+
+    // Clear the UAV data
+    memset(&pIndices[indexCount], 0, uavBufferSize);
+
     uploadDevHostBuffer->Unmap(0, nullptr);
 
     WriteToDeviceResourceAndSync(commandList, vertexBuffer, uploadDevHostBuffer, 0U, 0U, sizeof(triangleVertices));
+    WriteToDeviceResourceAndSync(commandList, indexBuffer, uploadDevHostBuffer, 0U, sizeof(triangleVertices), indexCount * sizeof(unsigned));
+    WriteToDeviceResourceAndSync(commandList, uavBuffer, uploadDevHostBuffer, 0U, sizeof(triangleVertices) + indexCount * sizeof(unsigned), uavBufferSize);
 
     hRes = commandList->Close();
     if (FAILED(hRes))
@@ -1059,8 +1088,14 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     // Initialize the vertex buffer view.
     const D3D12_VERTEX_BUFFER_VIEW vertexBufferView{
         .BufferLocation = vertexBuffer->GetGPUVirtualAddress(),
-        .SizeInBytes = (uint32_t)sizeof(triangleVertices),
+        .SizeInBytes = UINT(sizeof(triangleVertices)),
         .StrideInBytes = sizeof(triangleVertices[0])
+    };
+
+    const D3D12_INDEX_BUFFER_VIEW indexBufferView{
+        .BufferLocation = indexBuffer->GetGPUVirtualAddress(),
+        .SizeInBytes = UINT(indexCount * sizeof(unsigned)),
+        .Format = DXGI_FORMAT_R32_UINT
     };
 
     D3D12_GPU_DESCRIPTOR_HANDLE cbvGPUDescHandle = cbv_uavDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
@@ -1082,8 +1117,13 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
 
 #if TEST_VARIABLE_SHADING_RATE
     const D3D12_SHADING_RATE_COMBINER combiners[D3D12_RS_SET_SHADING_RATE_COMBINER_COUNT] = { D3D12_SHADING_RATE_COMBINER_PASSTHROUGH, D3D12_SHADING_RATE_COMBINER_PASSTHROUGH };
-    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_1X1, combiners);
+    ((ID3D12GraphicsCommandList5*)commandBundleList)->RSSetShadingRate(D3D12_SHADING_RATE_2X2, combiners);
+#endif
+
+#if TEST_VARIABLE_SHADING_RATE || TEST_PRIMITIVE_POINT
     commandBundleList->DrawInstanced((UINT)std::size(triangleVertices), 1U, 0U, 0U);
+    //commandBundleList->IASetIndexBuffer(&indexBufferView);
+    //commandBundleList->DrawIndexedInstanced(indexCount, 1U, 0U, 0U, 0U);
 #else
     commandBundleList->DrawInstanced(3U, 1U, 0U, 0U);
 #endif
@@ -1116,7 +1156,7 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
     // we just want to wait for setup to complete before continuing.
     WaitForPreviousFrame(commandQueue);
 
-    return std::make_tuple(uploadDevHostBuffer, vertexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer, readBackTextureHostBuffer, uavCompOutBuffer);
+    return std::make_tuple(uploadDevHostBuffer, vertexBuffer, indexBuffer, constantBuffer, uavBuffer, readbackDevHostBuffer, readBackTextureHostBuffer, uavCompOutBuffer);
 }
 
 // @return std::make_pair(uploadDevHostBuffer, vertexBuffer)
@@ -1720,6 +1760,7 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     ID3D12DescriptorHeap* cbv_uavDescriptorHeap = nullptr;
     ID3D12Resource* uploadDevHostBuffer = nullptr;
     ID3D12Resource* vertexBuffer = nullptr;
+    ID3D12Resource* indexBuffer = nullptr;
     ID3D12Resource* rtTexture = nullptr;
     ID3D12Resource* dsTexture = nullptr;
     ID3D12Resource* resolvedRTTexture = nullptr;
@@ -1760,11 +1801,12 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     auto const renderVertexBufferResult = CreateVertexBufferForRenderTexture(d3d_device, rootSignature, commandQueue, commandList, commandBundle, linePipelineState, cbv_uavDescriptorHeap);
     uploadDevHostBuffer = std::get<0>(renderVertexBufferResult);
     vertexBuffer = std::get<1>(renderVertexBufferResult);
-    constantBuffer = std::get<2>(renderVertexBufferResult);
-    uavBuffer = std::get<3>(renderVertexBufferResult);
-    readbackDevHostBuffer = std::get<4>(renderVertexBufferResult);
-    readBackTextureHostBuffer = std::get<5>(renderVertexBufferResult);
-    uavCompOutBuffer = std::get<6>(renderVertexBufferResult);
+    indexBuffer = std::get<2>(renderVertexBufferResult);
+    constantBuffer = std::get<3>(renderVertexBufferResult);
+    uavBuffer = std::get<4>(renderVertexBufferResult);
+    readbackDevHostBuffer = std::get<5>(renderVertexBufferResult);
+    readBackTextureHostBuffer = std::get<6>(renderVertexBufferResult);
+    uavCompOutBuffer = std::get<7>(renderVertexBufferResult);
 
     do
     {
@@ -1854,6 +1896,8 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
     uavCompOutBuffer->Release();
     readbackDevHostBuffer->Release();
     readBackTextureHostBuffer->Release();
+    indexBuffer->Release();
+
     if (computeRootSignature != nullptr) {
         computeRootSignature->Release();
     }

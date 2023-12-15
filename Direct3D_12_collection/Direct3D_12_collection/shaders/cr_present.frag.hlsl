@@ -24,7 +24,7 @@ float4 PSMain(PSInput input) : SV_TARGET
     const int y = int(input.position.y) / 8;
 
 #if USE_MSAA
-    TEXEL_TYPE dstColor = rtTextureMS.Load(int2(x, y), 2);
+    TEXEL_TYPE dstColor = rtTextureMS.Load(int2(x, y), 0);
 #else
     TEXEL_TYPE dstColor = rtTexture.Load(int3(x, y, 0));
 #endif
