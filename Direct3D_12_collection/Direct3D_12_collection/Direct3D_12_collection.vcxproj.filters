@@ -42,6 +42,12 @@
     <ClCompile Include="ProjectionTest.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="ExecuteIndirectTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="PSWritePrimIDTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\basic.frag.hlsl">
@@ -96,6 +102,21 @@
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\cr.comp.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\exec_indirect.comp.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\exec_indirect.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\exec_indirect_draw.vert.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\ps_write_primID.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\ps_write_primID.vert.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
   </ItemGroup>

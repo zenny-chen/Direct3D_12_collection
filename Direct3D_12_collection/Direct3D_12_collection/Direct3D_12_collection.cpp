@@ -4,8 +4,9 @@
 #include "common.h"
 #include <ntddkbd.h>
 
-static constexpr UINT MAX_HARDWARE_ADAPTER_COUNT = 16;
-static constexpr UINT TOTAL_FRAME_COUNT = 5;
+static constexpr UINT MAX_HARDWARE_ADAPTER_COUNT = 16U;
+static constexpr UINT MAX_COMMAND_SIGNATURE_COUNT = 16U;
+static constexpr UINT TOTAL_FRAME_COUNT = 5U;;
 
 static IDXGIFactory4* s_factory = nullptr;
 static ID3D12Device* s_device = nullptr;
@@ -19,26 +20,32 @@ static UINT s_rtvDescriptorSize = 0;
 static ID3D12DescriptorHeap* s_descriptorHeap = nullptr;
 static ID3D12DescriptorHeap* s_samplerDescriptorHeap = nullptr;
 static ID3D12RootSignature* s_rootSignature = nullptr;
-static ID3D12PipelineState* s_pipelineState = nullptr;
+static ID3D12PipelineState* s_pipelineStates[MAX_COMMAND_SIGNATURE_COUNT] { };
 static ID3D12GraphicsCommandList* s_commandList = nullptr;
-static ID3D12GraphicsCommandList* s_commandBundle = nullptr;
+static ID3D12GraphicsCommandList* s_commandBundles[MAX_COMMAND_SIGNATURE_COUNT] { };
+static ID3D12CommandSignature* s_commandSignatures[MAX_COMMAND_SIGNATURE_COUNT] { };
 static ID3D12Resource* s_renderTargets[TOTAL_FRAME_COUNT]{ };
 static ID3D12Resource* s_swapBackBuffers[TOTAL_FRAME_COUNT];
 // Host visible device buffer as an intermediate upload buffer
 static ID3D12Resource* s_devHostBuffer = nullptr;
 static ID3D12Resource* s_readbackHostBuffer = nullptr;
 static ID3D12Resource* s_vertexBuffer = nullptr;
+static ID3D12Resource* s_indexBuffer = nullptr;
 static ID3D12Resource* s_constantBuffer = nullptr;
 static ID3D12Resource* s_offsetConstantBuffer = nullptr;
 static ID3D12Resource* s_uavBuffer = nullptr;
 static ID3D12Resource* s_rtTexture = nullptr;
 static ID3D12Resource* s_texture = nullptr;
+static ID3D12Resource* s_indirectArgumentBuffer = nullptr;
+static ID3D12Resource* s_indirectCountBuffer = nullptr;
 
 static bool s_needRotate = true;
 static bool s_needSetDescriptorHeapInDirectCommandList = false;
 static auto (*s_renderPostProcessFunc)() -> void = nullptr;
-static auto (*s_translateCallbackFunc)(const TranslationType&) -> void;
-static auto (*s_fetchTranslationSetFunc)() -> CommonTranslationSet;
+static auto (*s_translateCallbackFunc)(const TranslationType&) -> void = nullptr;
+static auto (*s_fetchTranslationSetFunc)() -> CommonTranslationSet = nullptr;
+static auto (*s_executeIndirectCallFunc)(ID3D12GraphicsCommandList*, ID3D12CommandSignature*, ID3D12Resource*, ID3D12Resource*, UINT) -> void = nullptr;
+static UINT s_currCommandSignatureCount = 0U;
 
 // Synchronization objects.
 static UINT s_currFrameIndex = 0;
@@ -1001,21 +1008,21 @@ static auto CreateBasicPipelineStateObject() -> bool
             .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
         };
 
-        HRESULT hRes = s_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_pipelineState));
+        HRESULT hRes = s_device->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&s_pipelineStates[0]));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateGraphicsPipelineState for basic PSO failed: %ld\n", hRes);
             break;
         }
 
-        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_commandAllocator, s_pipelineState, IID_PPV_ARGS(&s_commandList));
+        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, s_commandAllocator, s_pipelineStates[0], IID_PPV_ARGS(&s_commandList));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateCommandList for basic PSO failed: %ld\n", hRes);
             break;
         }
 
-        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, s_commandBundleAllocator, s_pipelineState, IID_PPV_ARGS(&s_commandBundle));
+        hRes = s_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_BUNDLE, s_commandBundleAllocator, s_pipelineStates[0], IID_PPV_ARGS(&s_commandBundles[0]));
         if (FAILED(hRes))
         {
             fprintf(stderr, "CreateCommandList for command bundle failed: %ld\n", hRes);
@@ -1162,16 +1169,16 @@ static auto CreateBasicVertexBuffer() -> bool
     s_constantBuffer->Unmap(0, nullptr);
 
     // Record commands to the command list bundle.
-    s_commandBundle->SetGraphicsRootSignature(s_rootSignature);
+    s_commandBundles[0]->SetGraphicsRootSignature(s_rootSignature);
     //commandBundleList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
     // There's no need to invoke SetDescriptorHeaps when using Root Constant Buffer View.
-    s_commandBundle->SetGraphicsRootConstantBufferView(0, s_constantBuffer->GetGPUVirtualAddress());
-    s_commandBundle->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-    s_commandBundle->IASetVertexBuffers(0, 1, &vertexBufferView);
-    s_commandBundle->DrawInstanced((UINT)std::size(squareVertices), 1, 0, 0);
+    s_commandBundles[0]->SetGraphicsRootConstantBufferView(0, s_constantBuffer->GetGPUVirtualAddress());
+    s_commandBundles[0]->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    s_commandBundles[0]->IASetVertexBuffers(0, 1, &vertexBufferView);
+    s_commandBundles[0]->DrawInstanced((UINT)std::size(squareVertices), 1, 0, 0);
 
     // End of the record
-    hRes = s_commandBundle->Close();
+    hRes = s_commandBundles[0]->Close();
     if (FAILED(hRes))
     {
         fprintf(stderr, "Close basic command bundle failed: %ld\n", hRes);
@@ -1279,8 +1286,22 @@ static auto PopulateCommandList() -> bool
     }
     
     // Execute the bundle to the command list
-    if (s_commandBundle != nullptr) {
-        s_commandList->ExecuteBundle(s_commandBundle);
+    if (s_currCommandSignatureCount == 0)
+    {
+        if (s_commandBundles[0] != nullptr) {
+            s_commandList->ExecuteBundle(s_commandBundles[0]);
+        }
+    }
+    else
+    {
+        assert(s_executeIndirectCallFunc != nullptr);
+
+        for (UINT i = 0; i < s_currCommandSignatureCount; ++i)
+        {
+            s_commandList->SetPipelineState(s_pipelineStates[i]);
+            s_commandList->ExecuteBundle(s_commandBundles[i]);
+            s_executeIndirectCallFunc(s_commandList, s_commandSignatures[i], s_indirectArgumentBuffer, s_indirectCountBuffer, i);
+        }
     }
 
     if (needRotate && s_fetchTranslationSetFunc == nullptr)
@@ -1366,7 +1387,7 @@ static auto Render() -> bool
 {
     if (s_commandList == nullptr) return false;
 
-    if (!ResetCommandAllocatorAndList(s_commandAllocator, s_commandList, s_pipelineState)) return false;
+    if (!ResetCommandAllocatorAndList(s_commandAllocator, s_commandList, s_pipelineStates[0])) return false;
 
     if (!PopulateCommandList()) return false;
 
@@ -1404,6 +1425,16 @@ static auto DestroyAllAssets() -> void
         s_fence->Release();
         s_fence = nullptr;
     }
+    if (s_indirectCountBuffer != nullptr)
+    {
+        s_indirectCountBuffer->Release();
+        s_indirectCountBuffer = nullptr;
+    }
+    if (s_indirectArgumentBuffer != nullptr)
+    {
+        s_indirectArgumentBuffer->Release();
+        s_indirectArgumentBuffer = nullptr;
+    }
     if (s_rtTexture != nullptr)
     {
         s_rtTexture->Release();
@@ -1439,25 +1470,41 @@ static auto DestroyAllAssets() -> void
         s_devHostBuffer->Release();
         s_devHostBuffer = nullptr;
     }
+    if (s_indexBuffer != nullptr)
+    {
+        s_indexBuffer->Release();
+        s_indexBuffer = nullptr;
+    }
     if (s_vertexBuffer != nullptr)
     {
         s_vertexBuffer->Release();
         s_vertexBuffer = nullptr;
     }
-    if (s_commandBundle != nullptr)
+    for (UINT i = 0; i < MAX_COMMAND_SIGNATURE_COUNT; ++i)
     {
-        s_commandBundle->Release();
-        s_commandBundle = nullptr;
+        if (s_commandSignatures[i] != nullptr)
+        {
+            s_commandSignatures[i]->Release();
+            s_commandSignatures[i] = nullptr;
+        }
+        if (s_commandBundles[i] != nullptr)
+        {
+            s_commandBundles[i]->Release();
+            s_commandBundles[i] = nullptr;
+        }
     }
     if (s_commandList != nullptr)
     {
         s_commandList->Release();
         s_commandList = nullptr;
     }
-    if (s_pipelineState != nullptr)
+    for (UINT i = 0; i < MAX_COMMAND_SIGNATURE_COUNT; ++i)
     {
-        s_pipelineState->Release();
-        s_pipelineState = nullptr;
+        if (s_pipelineStates[i] != nullptr)
+        {
+            s_pipelineStates[i]->Release();
+            s_pipelineStates[i] = nullptr;
+        }
     }
     if (s_rootSignature != nullptr)
     {
@@ -1749,16 +1796,18 @@ auto main(int argc, const char* argv[]) -> int
     puts("[3]: Projection Test");
     puts("[4]: Variable-Rate Shading (VRS)");
     puts("[5]: Conservative Rasterization (CR)");
+    puts("[6]: ExecuteIndirect Test");
+    puts("[7]: Pixel Shader Write Primitive ID");
 
-    constexpr long optionalItemsBegin = 6L;
+    constexpr long optionalItemsBegin = 8L;
     constexpr long optionalItemCount = 3L;
     constexpr long totalItemCount = optionalItemsBegin + optionalItemCount;
     
     if (s_supportMeshShader)
     {
-        puts("[6]: Basic Mesh Shader Rendering");
-        puts("[7]: Only Mesh Shader Rendering");
-        puts("[8]: Mesh Shader Without Rasterization Rendering");
+        puts("[8]: Basic Mesh Shader Rendering");
+        puts("[9]: Only Mesh Shader Rendering");
+        puts("[10]: Mesh Shader Without Rasterization Rendering");
     }
 
     char cmdBuf[256]{ };
@@ -1800,9 +1849,9 @@ auto main(int argc, const char* argv[]) -> int
             // Basic Texturing
             auto externalAssets = CreateTextureBasicTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
             s_rootSignature = std::get<0>(externalAssets);
-            s_pipelineState = std::get<1>(externalAssets);
+            s_pipelineStates[0] = std::get<1>(externalAssets);
             s_commandList = std::get<2>(externalAssets);
-            s_commandBundle = std::get<3>(externalAssets);
+            s_commandBundles[0] = std::get<3>(externalAssets);
 
             s_descriptorHeap = std::get<4>(externalAssets);
             s_samplerDescriptorHeap = std::get<5>(externalAssets);
@@ -1823,14 +1872,14 @@ auto main(int argc, const char* argv[]) -> int
             s_rootSignature = std::get<0>(externalAssets);
             if (s_rootSignature == nullptr) break;
 
-            s_pipelineState = std::get<1>(externalAssets);
-            if (s_pipelineState == nullptr) break;
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            if (s_pipelineStates[0] == nullptr) break;
 
             s_commandList = std::get<2>(externalAssets);
             if (s_commandList == nullptr) break;
 
-            s_commandBundle = std::get<3>(externalAssets);
-            if (s_commandBundle == nullptr) break;
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            if (s_commandBundles[0] == nullptr) break;
 
             s_descriptorHeap = std::get<4>(externalAssets);
             s_devHostBuffer = std::get<5>(externalAssets);
@@ -1840,7 +1889,7 @@ auto main(int argc, const char* argv[]) -> int
             s_constantBuffer = std::get<9>(externalAssets);
 
             s_needSetDescriptorHeapInDirectCommandList = true;
-            s_renderPostProcessFunc = RenderPostProcessForTransformFeedback;
+            s_renderPostProcessFunc = &RenderPostProcessForTransformFeedback;
         }
         else if (selectedRenderModeIndex == 3)
         {
@@ -1850,14 +1899,14 @@ auto main(int argc, const char* argv[]) -> int
             s_rootSignature = std::get<0>(externalAssets);
             if (s_rootSignature == nullptr) break;
 
-            s_pipelineState = std::get<1>(externalAssets);
-            if (s_pipelineState == nullptr) break;
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            if (s_pipelineStates[0] == nullptr) break;
 
             s_commandList = std::get<2>(externalAssets);
             if (s_commandList == nullptr) break;
 
-            s_commandBundle = std::get<3>(externalAssets);
-            if (s_commandBundle == nullptr) break;
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            if (s_commandBundles[0] == nullptr) break;
 
             s_devHostBuffer = std::get<4>(externalAssets);
             s_vertexBuffer = std::get<5>(externalAssets);
@@ -1865,17 +1914,17 @@ auto main(int argc, const char* argv[]) -> int
 
             if (!std::get<7>(externalAssets)) break;
 
-            RegisterTranslateCallback(ProjectionTestTranslateProcess);
-            RegisterFetchTranslationSetCallback(ProjectionTestFetchTranslationSet);
+            RegisterTranslateCallback(&ProjectionTestTranslateProcess);
+            RegisterFetchTranslationSetCallback(&ProjectionTestFetchTranslationSet);
         }
         else if (selectedRenderModeIndex == 4)
         {
             // Variable-rate Shading
             auto externalAssets = CreateVariableRateShadingTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
             s_rootSignature = std::get<0>(externalAssets);
-            s_pipelineState = std::get<1>(externalAssets);
+            s_pipelineStates[0] = std::get<1>(externalAssets);
             s_commandList = std::get<2>(externalAssets);
-            s_commandBundle = std::get<3>(externalAssets);
+            s_commandBundles[0] = std::get<3>(externalAssets);
             s_descriptorHeap = std::get<4>(externalAssets);
             s_devHostBuffer = std::get<5>(externalAssets);
             s_vertexBuffer = std::get<6>(externalAssets);
@@ -1891,9 +1940,9 @@ auto main(int argc, const char* argv[]) -> int
             // Conservative Rasterization
             auto externalAssets = CreateConservativeRasterizationTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
             s_rootSignature = std::get<0>(externalAssets);
-            s_pipelineState = std::get<1>(externalAssets);
+            s_pipelineStates[0] = std::get<1>(externalAssets);
             s_commandList = std::get<2>(externalAssets);
-            s_commandBundle = std::get<3>(externalAssets);
+            s_commandBundles[0] = std::get<3>(externalAssets);
             s_rtvTextureDescriptorHeap = std::get<4>(externalAssets);
             s_descriptorHeap = std::get<5>(externalAssets);
             s_devHostBuffer = std::get<6>(externalAssets);
@@ -1904,6 +1953,55 @@ auto main(int argc, const char* argv[]) -> int
 
             s_needSetDescriptorHeapInDirectCommandList = true;
         }
+        else if (selectedRenderModeIndex == 6)
+        {
+            // ExecuteIndirect Test
+            auto externalAssets = CreateExecuteIndirectTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator, s_supportMeshShader);
+            s_rootSignature = std::get<0>(externalAssets);
+            auto pipelineStateArray = std::get<1>(externalAssets);
+            s_commandList = std::get<2>(externalAssets);
+            auto commandBunleArray = std::get<3>(externalAssets);
+            s_descriptorHeap = std::get<4>(externalAssets);
+            s_devHostBuffer = std::get<5>(externalAssets);
+            s_vertexBuffer = std::get<6>(externalAssets);
+            s_indexBuffer = std::get<7>(externalAssets);
+            s_constantBuffer = std::get<8>(externalAssets);
+            s_indirectArgumentBuffer = std::get<9>(externalAssets);
+            s_indirectCountBuffer = std::get<10>(externalAssets);
+            auto commandSignatureArray = std::get<11>(externalAssets);
+
+            if (!std::get<12>(externalAssets)) break;
+
+            UINT index = 0;
+            for (auto commandBundle : commandBunleArray)
+            {
+                if (commandBundle == nullptr) break;
+
+                s_commandBundles[index] = commandBundle;
+                s_commandSignatures[index] = commandSignatureArray[index];
+                s_pipelineStates[index] = pipelineStateArray[index];
+
+                ++index;
+            }
+            s_currCommandSignatureCount = index;
+
+            s_needSetDescriptorHeapInDirectCommandList = true;
+            s_executeIndirectCallFunc = &ExecuteIndirectCallbackHandler;
+        }
+        else if (selectedRenderModeIndex == 7)
+        {
+            // Pixel Shader write Primitive ID
+            auto externalAssets = CreatePSWritePrimIDTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+            s_rootSignature = std::get<0>(externalAssets);
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            s_commandList = std::get<2>(externalAssets);
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            s_devHostBuffer = std::get<4>(externalAssets);
+            s_vertexBuffer = std::get<5>(externalAssets);
+            s_indexBuffer = std::get<6>(externalAssets);
+
+            if (!std::get<7>(externalAssets)) break;
+        }
         else if(selectedRenderModeIndex < totalItemCount - 1)
         {
             // Basic Mesh Shader & Only Mesh Shader
@@ -1913,14 +2011,14 @@ auto main(int argc, const char* argv[]) -> int
             s_rootSignature = std::get<0>(externalAssets);
             if (s_rootSignature == nullptr) break;
 
-            s_pipelineState = std::get<1>(externalAssets);
-            if (s_pipelineState == nullptr) break;
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            if (s_pipelineStates[0] == nullptr) break;
 
             s_commandList = std::get<2>(externalAssets);
             if (s_commandList == nullptr) break;
 
-            s_commandBundle = std::get<3>(externalAssets);
-            if (s_commandBundle == nullptr) break;
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            if (s_commandBundles[0] == nullptr) break;
         }
         else if (selectedRenderModeIndex == totalItemCount - 1)
         {
@@ -1930,14 +2028,14 @@ auto main(int argc, const char* argv[]) -> int
             s_rootSignature = std::get<0>(externalAssets);
             if (s_rootSignature == nullptr) break;
 
-            s_pipelineState = std::get<1>(externalAssets);
-            if (s_pipelineState == nullptr) break;
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            if (s_pipelineStates[0] == nullptr) break;
 
             s_commandList = std::get<2>(externalAssets);
             if (s_commandList == nullptr) break;
 
-            s_commandBundle = std::get<3>(externalAssets);
-            if (s_commandBundle == nullptr) break;
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            if (s_commandBundles[0] == nullptr) break;
 
             s_devHostBuffer = std::get<4>(externalAssets);
             s_uavBuffer = std::get<5>(externalAssets);

@@ -1538,9 +1538,9 @@ static auto CreateRootSignatureForCompute(ID3D12Device* d3d_device) -> ID3D12Roo
                 .NumDescriptorRanges = 1,
                 .pDescriptorRanges = &descRanges[0]
             },
-        // This texture buffer will just be accessed in a compute shader
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-    },
+            // This texture buffer will just be accessed in a compute shader
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
         // u0
         {
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
@@ -1548,9 +1548,9 @@ static auto CreateRootSignatureForCompute(ID3D12Device* d3d_device) -> ID3D12Roo
                 .NumDescriptorRanges = 1,
                 .pDescriptorRanges = &descRanges[1]
             },
-        // This unordered access view buffer will just be accessed in a compute shader
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-    },
+            // This unordered access view buffer will just be accessed in a compute shader
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        },
         // b0
         {
             .ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
@@ -1559,9 +1559,9 @@ static auto CreateRootSignatureForCompute(ID3D12Device* d3d_device) -> ID3D12Roo
                 .RegisterSpace = 0,
                 .Num32BitValues = 1
             },
-        // This unordered access view buffer will just be accessed in a compute shader
-        .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-    }
+            // This unordered access view buffer will just be accessed in a compute shader
+            .ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+        }
     };
 
     // Create a root signature.
@@ -1595,7 +1595,8 @@ static auto CreateRootSignatureForCompute(ID3D12Device* d3d_device) -> ID3D12Roo
             fprintf(stderr, "CreateRootSignature failed: %ld\n", hRes);
             break;
         }
-    } while (false);
+    }
+    while (false);
 
     if (signature != nullptr) {
         signature->Release();
@@ -1651,7 +1652,8 @@ static auto CreatePipelineStateObjectForCompute(ID3D12Device* d3d_device, ID3D12
             fprintf(stderr, "CreateCommandList for command bundle failed: %ld\n", hRes);
             break;
         }
-    } while (false);
+    }
+    while (false);
 
     if (computeShaderObj.pShaderBytecode != nullptr) {
         free((void*)computeShaderObj.pShaderBytecode);

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstdarg>
+#include <cassert>
 #include <cerrno>
 
 #define _USE_MATH_DEFINES
@@ -12,6 +13,7 @@
 #include <limits>
 #include <algorithm>
 #include <utility>
+#include <array>
 
 #include <Windows.h>
 #include <d3d12.h>
@@ -201,4 +203,12 @@ extern auto CreateVariableRateShadingTestAssets(ID3D12Device* d3d_device, ID3D12
 
 extern auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
                                         std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12DescriptorHeap*, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>;
+
+extern auto CreateExecuteIndirectTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator, bool supportMeshShader) ->
+                                        std::tuple<ID3D12RootSignature*, std::array<ID3D12PipelineState*, 3>, ID3D12GraphicsCommandList*, std::array<ID3D12GraphicsCommandList*, 3>, ID3D12DescriptorHeap*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, std::array<ID3D12CommandSignature*, 3>, bool>;
+
+extern auto ExecuteIndirectCallbackHandler(ID3D12GraphicsCommandList* commandList, ID3D12CommandSignature* commandSignature, ID3D12Resource* indirectArgumentBuffer, ID3D12Resource* indirectCountBuffer, UINT index) -> void;
+
+extern auto CreatePSWritePrimIDTestAssets(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue, ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
+                                        std::tuple<ID3D12RootSignature*, ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*, ID3D12Resource*, ID3D12Resource*, ID3D12Resource*, bool>;
 

@@ -64,8 +64,8 @@ PSInput VSMain(float4 position : POSITION, float2 texCoords : TEXCOORD)
     const float4x4 projectionMatrix = {
         1.0f, 0.0f, 0.0f, 0.0f,     // row 0
         0.0f, 1.0f, 0.0f, 0.0f,     // row 1
-        0.0f, 0.0f, -0.25f, 0.0f,    // row 2
-        0.0f, 0.0f, -1.25f, 1.0f     // row 3
+        0.0f, 0.0f, -0.25f, 0.0f,   // row 2
+        0.0f, 0.0f, -1.25f, 1.0f    // row 3
     };
 
     PSInput result;
