@@ -48,6 +48,9 @@
     <ClCompile Include="PSWritePrimIDTest.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="DepthBoundTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\basic.frag.hlsl">
@@ -117,6 +120,15 @@
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
     <FxCompile Include="shaders\ps_write_primID.vert.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\depth_bound_test.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\depth_bound_test.vert.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\depth_bound_test.comp.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
   </ItemGroup>

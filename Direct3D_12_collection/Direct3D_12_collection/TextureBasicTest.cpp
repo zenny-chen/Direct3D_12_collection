@@ -234,6 +234,29 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
     return std::make_tuple(pipelineState, commandList, commandBundleList);;
 }
 
+static HBITMAP LoadBMPFile(BITMAP *outBitmapInfo)
+{
+    HBITMAP hBmp = (HBITMAP)LoadImageA(nullptr, "images/geom.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
+    if (hBmp == nullptr)
+    {
+        fprintf(stderr, "Load image file failed!\n");
+        return nullptr;
+    }
+
+    BITMAP bitmap;
+    if (GetObjectA(hBmp, sizeof(bitmap), &bitmap) == 0)
+    {
+        fprintf(stderr, "Bitmap get failed!\n");
+        return nullptr;
+    }
+
+    if (outBitmapInfo != nullptr) {
+        *outBitmapInfo = bitmap;
+    }
+
+    return hBmp;
+}
+
 // @return [cbv_srvDescriptorHeap, samplerDescriptorHeap, texture]
 static auto CreateTextureAndSampler(ID3D12Device* d3d_device, ID3D12CommandQueue* commandQueue,
                                     ID3D12CommandAllocator* commandAllocator, ID3D12GraphicsCommandList* commandList, ID3D12PipelineState* pipelineState) ->
@@ -284,19 +307,8 @@ static auto CreateTextureAndSampler(ID3D12Device* d3d_device, ID3D12CommandQueue
     do
     {
         // Load BMP File
-        hBmp = (HBITMAP)LoadImageA(nullptr, "images/geom.bmp", IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE | LR_CREATEDIBSECTION);
-        if (hBmp == nullptr)
-        {
-            fprintf(stderr, "Load image file failed!\n");
-            break;
-        }
-
         BITMAP bitmap;
-        if (GetObjectA(hBmp, sizeof(bitmap), &bitmap) == 0)
-        {
-            fprintf(stderr, "Bitmap get failed!\n");
-            break;
-        }
+        hBmp = LoadBMPFile(&bitmap);
 
         const D3D12_HEAP_PROPERTIES defaultHeapProperties{
            .Type = D3D12_HEAP_TYPE_DEFAULT,
