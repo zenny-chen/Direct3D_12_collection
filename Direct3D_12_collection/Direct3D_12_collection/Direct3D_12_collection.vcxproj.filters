@@ -51,6 +51,9 @@
     <ClCompile Include="DepthBoundTest.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="TargetIndependentTest.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\basic.frag.hlsl">

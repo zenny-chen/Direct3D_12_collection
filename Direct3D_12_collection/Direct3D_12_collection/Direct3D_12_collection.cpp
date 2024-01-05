@@ -57,6 +57,7 @@ static D3D_FEATURE_LEVEL s_maxFeatureLevel = D3D_FEATURE_LEVEL_1_0_CORE;
 static D3D_SHADER_MODEL s_highestShaderModel = D3D_SHADER_MODEL_5_1;
 static UINT s_waveSize = 0;
 static UINT s_maxSIMDSize = 0;
+static bool s_supportDepthTestBound = false;
 static bool s_supportMeshShader = false;
 
 static bool s_isWindows11OrAbove = false;
@@ -441,6 +442,17 @@ static auto QueryDeviceBasicFeatures() -> bool
     printf("Current device supports conservative rasterization tier: %d\n", options.ConservativeRasterizationTier);
     printf("Current device supports 64KB standard swizzle pattern: %s\n", options.StandardSwizzle64KBSupported ? "YES" : "NO");
     printf("Current device supports resource heap tier: %d\n", options.ResourceHeapTier);
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS2 options2{ };
+    hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS2, &options2, sizeof(options2));
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "CheckFeatureSupport for `D3D12_FEATURE_D3D12_OPTIONS2` failed: %ld\n", hRes);
+        return false;
+    }
+    s_supportDepthTestBound = options2.DepthBoundsTestSupported != FALSE;
+    printf("Current device supports Depth Bounds Test: %s\n", s_supportDepthTestBound ? "YES" : "NO");
+    printf("Current device supports programmable sample positions tier: %d\n", options2.ProgrammableSamplePositionsTier);
 
     D3D12_FEATURE_DATA_D3D12_OPTIONS4 options4{ };
     hRes = s_device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS4, &options4, sizeof(options4));
@@ -1799,16 +1811,17 @@ auto main(int argc, const char* argv[]) -> int
     puts("[6]: ExecuteIndirect Test");
     puts("[7]: Pixel Shader Write Primitive ID");
     puts("[8]: Depth Bound Test");
+    puts("[9]: Target Independent Rasterization Test");
 
-    constexpr long optionalItemsBegin = 9L;
+    constexpr long optionalItemsBegin = 10L;
     constexpr long optionalItemCount = 3L;
     constexpr long totalItemCount = optionalItemsBegin + optionalItemCount;
     
     if (s_supportMeshShader)
     {
-        puts("[9]: Basic Mesh Shader Rendering");
-        puts("[10]: Only Mesh Shader Rendering");
-        puts("[11]: Mesh Shader Without Rasterization Rendering");
+        puts("[10]: Basic Mesh Shader Rendering");
+        puts("[11]: Only Mesh Shader Rendering");
+        puts("[12]: Mesh Shader Without Rasterization Rendering");
     }
 
     char cmdBuf[256]{ };
@@ -2007,6 +2020,24 @@ auto main(int argc, const char* argv[]) -> int
         {
             // Depth Bound Test
             auto externalAssets = CreateDepthBoundTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+            s_rootSignature = std::get<0>(externalAssets);
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            s_commandList = std::get<2>(externalAssets);
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            s_descriptorHeap = std::get<4>(externalAssets);
+            s_rtvTextureDescriptorHeap = std::get<5>(externalAssets);
+            s_devHostBuffer = std::get<6>(externalAssets);
+            s_vertexBuffer = std::get<7>(externalAssets);
+            s_rtTexture = std::get<8>(externalAssets);
+
+            if (!std::get<9>(externalAssets)) break;
+
+            s_needSetDescriptorHeapInDirectCommandList = true;
+        }
+        else if (selectedRenderModeIndex == 9)
+        {
+            // Target Independent Rasterization
+            auto externalAssets = CreateTargetIndependentTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
             s_rootSignature = std::get<0>(externalAssets);
             s_pipelineStates[0] = std::get<1>(externalAssets);
             s_commandList = std::get<2>(externalAssets);

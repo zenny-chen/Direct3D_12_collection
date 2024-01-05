@@ -149,6 +149,7 @@
     <ClCompile Include="MeshShaderTest.cpp" />
     <ClCompile Include="ProjectionTest.cpp" />
     <ClCompile Include="PSWritePrimIDTest.cpp" />
+    <ClCompile Include="TargetIndependentTest.cpp" />
     <ClCompile Include="TextureBasicTest.cpp" />
     <ClCompile Include="TransformFeedbackTest.cpp" />
     <ClCompile Include="VariableRateShadingTest.cpp" />

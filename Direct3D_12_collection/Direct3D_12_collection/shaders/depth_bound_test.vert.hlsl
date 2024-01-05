@@ -25,8 +25,8 @@
 
 struct PSInput
 {
-    float4 position : SV_POSITION;
-    float4 color : COLOR;
+    centroid float4 position : SV_POSITION;
+    centroid float4 color : COLOR;
 };
 
 struct CBTranslate
