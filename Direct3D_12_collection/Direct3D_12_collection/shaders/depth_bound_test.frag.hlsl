@@ -8,7 +8,7 @@ struct PSInput
 
 RWBuffer<uint> uavOutput : register(u0, space0);
 
-//[earlydepthstencil]
+[earlydepthstencil]
 float4 PSMain(PSInput input
 #if ENABLE_WRITE_DEPTH
     , out float outDepth : SV_Depth

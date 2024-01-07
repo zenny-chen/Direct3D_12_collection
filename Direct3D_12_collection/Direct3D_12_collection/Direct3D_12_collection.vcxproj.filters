@@ -134,6 +134,12 @@
     <FxCompile Include="shaders\depth_bound_test.comp.hlsl">
       <Filter>资源文件\shaders</Filter>
     </FxCompile>
+    <FxCompile Include="shaders\tir.frag.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="shaders\tir.vert.hlsl">
+      <Filter>资源文件\shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common.h">

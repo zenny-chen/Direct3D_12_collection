@@ -4,7 +4,7 @@
 static constexpr UINT TEXTURE_SIZE = WINDOW_WIDTH / 8U;
 static constexpr UINT TEXTURE_SAMPLE_COUNT = 1U;
 static constexpr bool MSAA_RENDER_TARGET_NEED_RESOLVE = true && TEXTURE_SAMPLE_COUNT > 1U;
-static constexpr UINT FORCE_SAMPLE_COUNT = 1U;
+static constexpr UINT FORCE_SAMPLE_COUNT = 4U;
 static constexpr UINT uavBufferSize = 64U;
 
 enum CBV_SRV_UAV_SLOT_ID
@@ -258,8 +258,8 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundleList, cbv_uavDescriptorHeap);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/depth_bound_test.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/depth_bound_test.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/tir.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/tir.frag.cso");
 
     do
     {
@@ -525,11 +525,11 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         float color[4];
     } triVertices[] {
         // top center
-        { { 0.0f, 0.25f, 0.0f, 1.0f }, { 0.9f, 0.9f, 0.1f, 1.0f } },
+        { { 0.0f, 0.25f, 0.0f, 1.0f }, { 0.9f, 0.1f, 0.1f, 1.0f } },
         // bottom right
-        { { 0.25f, -0.25f, 0.0f, 1.0f }, { 0.9f, 0.9f, 0.1f, 1.0f } },
+        { { 0.25f, -0.25f, 0.0f, 1.0f }, { 0.1f, 0.9f, 0.1f, 1.0f } },
         // bottom left
-        { { -0.25f, -0.25f, 0.0f, 1.0f }, { 0.9f, 0.9f, 0.1f, 1.0f } }
+        { { -0.25f, -0.25f, 0.0f, 1.0f }, { 0.1f, 0.1f, 0.9f, 1.0f } }
     };
 
     const D3D12_HEAP_PROPERTIES defaultHeapProperties{
