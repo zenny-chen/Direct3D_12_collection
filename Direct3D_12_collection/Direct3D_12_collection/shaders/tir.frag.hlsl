@@ -10,7 +10,7 @@ RWBuffer<uint> uavOutput : register(u0, space0);
 float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outputCoverage : SV_Coverage) : SV_TARGET
 {
     InterlockedAdd(uavOutput[0], 1U);
-
+    
     float4 dstColor = input.color;
 
     const float inputAlpha = dstColor.a;
@@ -77,7 +77,7 @@ float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outpu
         break;
     }
 
-    const uint dstCoverage = reversebits(inputCoverage);
+    uint dstCoverage = reversebits(inputCoverage);
     outputCoverage = (dstCoverage >> 28) | (0x0fU * 1U);
 
     return dstColor;
