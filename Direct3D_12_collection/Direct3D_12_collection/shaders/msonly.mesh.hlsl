@@ -5,6 +5,12 @@ struct MyOutputVertex
     float4 color : COLOR;
 };
 
+struct MyOutputPrimitive
+{
+    bool needCull : SV_CullPrimitive;
+    uint primID : SV_PrimitiveID;
+};
+
 struct CBColorVarying
 {
     float4 bottomLeft;
@@ -20,7 +26,7 @@ ConstantBuffer<CBColorVarying> cbColorVaryings : register(b0);
 [outputtopology("triangle")]        // equivalent to [outputtopology("triangle_cw")]
 [numthreads(128, 1, 1)]
 void MeshMain(in uint globalTID : SV_DispatchThreadID, in uint3 groupID : SV_GroupID, in uint3 localTID : SV_GroupThreadID,
-            out vertices MyOutputVertex outVertBuffer[256], out indices uint3 outPrimIndices[254])
+            out vertices MyOutputVertex outVertBuffer[256], out indices uint3 outPrimIndices[254], out primitives MyOutputPrimitive outPrimAttrs[254])
 {
     // We're going to generate 256 vertices and 254 triangles (127 differential rectangles)
     SetMeshOutputCounts(256, 254);
@@ -73,7 +79,7 @@ void MeshMain(in uint globalTID : SV_DispatchThreadID, in uint3 groupID : SV_Gro
     outVertBuffer[localTID.x * 2U + 1U].color = color1;
 
     // Assemble the primitive
-    if (localTID.x >= 127) return;
+    //if (localTID.x >= 127) return;
 
     // Each work item assembles 2 primitives (2 triangles compose 1 rectangle)
     const uint v0 = localTID.x * 2;
@@ -83,5 +89,13 @@ void MeshMain(in uint globalTID : SV_DispatchThreadID, in uint3 groupID : SV_Gro
 
     outPrimIndices[localTID.x * 2 + 0U] = uint3(v0, v1, v2);
     outPrimIndices[localTID.x * 2 + 1U] = uint3(v2, v1, v3);
+
+    // Cull evenly ordered rectangles
+    bool needCull = (localTID.x & 1U) == 0;
+    outPrimAttrs[localTID.x * 2 + 0U].needCull = needCull;      // may be modified
+    outPrimAttrs[localTID.x * 2 + 1U].needCull = needCull;      // may be modified
+
+    outPrimAttrs[localTID.x * 2 + 0U].primID = localTID.x * 2 + 0U;
+    outPrimAttrs[localTID.x * 2 + 1U].primID = localTID.x * 2 + 1U;
 }
 
