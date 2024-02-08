@@ -1242,8 +1242,8 @@ static auto PopulateCommandList() -> bool
     const D3D12_RECT scissorRect{
         .left = LONG(s_render_width - VIEWPORT_WIDTH) / 2L,
         .top = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L,
-        .right = LONG(s_render_width - VIEWPORT_WIDTH) / 2L + VIEWPORT_WIDTH,
-        .bottom = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L + VIEWPORT_HEIGHT
+        .right = LONG(s_render_width - VIEWPORT_WIDTH) / 2L + LONG(VIEWPORT_WIDTH),
+        .bottom = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L + LONG(VIEWPORT_HEIGHT)
     };
     s_commandList->RSSetScissorRects(1, &scissorRect);
 
