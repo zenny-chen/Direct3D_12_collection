@@ -79,7 +79,7 @@ void MeshMain(in uint globalTID : SV_DispatchThreadID, in uint3 groupID : SV_Gro
     outVertBuffer[localTID.x * 2U + 1U].color = color1;
 
     // Assemble the primitive
-    if (localTID.x >= 127) return;
+    //if (localTID.x >= 127) return;
 
     // Each work item assembles 2 primitives (2 triangles compose 1 rectangle)
     const uint v0 = localTID.x * 2;

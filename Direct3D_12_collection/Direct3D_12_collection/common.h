@@ -139,6 +139,12 @@ static constexpr int WINDOW_WIDTH = 512;
 // Window Height
 static constexpr int WINDOW_HEIGHT = 512;
 
+// Viewport Width
+static constexpr int VIEWPORT_WIDTH = 256;
+
+// Viewport Height
+static constexpr int VIEWPORT_HEIGHT = 256;
+
 // Defined by the Direct3D 12 Spec (In bytes)
 static constexpr UINT CONSTANT_BUFFER_ALLOCATION_GRANULARITY = 256U;
 

@@ -64,6 +64,7 @@ static bool s_isWindows11OrAbove = false;
 static POINT s_wndMinsize{ };       // minimum window size
 static const char s_appName[] = "Direct3D 12 Collections";
 static float s_rotateAngle = 0.0f;
+static UINT s_render_width = 0U, s_render_height = 0U;
 
 auto WriteToDeviceResourceAndSync(
     _In_ ID3D12GraphicsCommandList* pCmdList,
@@ -571,7 +572,7 @@ static auto QueryDeviceMeshShaderSupport() -> bool
 
     printf("Current device supports typed resource 64-bit integer atomics: %s\n", options9.AtomicInt64OnTypedResourceSupported ? "YES" : "NO");
     printf("Current device supports 64-bit integer atomics on groupshared variables: %s\n", options9.AtomicInt64OnGroupSharedSupported ? "YES" : "NO");
-    printf("Current device supports derivative and derivative-dependent texture sample operations in MeshA and Amplification Shaders: %s\n", options9.DerivativesInMeshAndAmplificationShadersSupported ? "YES" : "NO");
+    printf("Current device supports derivative and derivative-dependent texture sample operations in Mesh and Amplification Shaders: %s\n", options9.DerivativesInMeshAndAmplificationShadersSupported ? "YES" : "NO");
     printf("Current device supports WaveMMA (wave_matrix) operations: %s\n", options9.WaveMMATier != D3D12_WAVE_MMA_TIER_NOT_SUPPORTED ? "YES" : "NO");
 
     return true;
@@ -708,7 +709,7 @@ static auto CreateCommandQueue() -> bool
 static auto CreateSwapChain(HWND hWnd) -> bool
 {
     DXGI_SWAP_CHAIN_DESC swapChainDesc{
-        .BufferDesc = {.Width = WINDOW_WIDTH, .Height = WINDOW_HEIGHT,
+        .BufferDesc = { .Width = s_render_width, .Height = s_render_height,
                         .RefreshRate = {.Numerator = 60, .Denominator = 1 },    // refresh rate of 60 FPS
                         .Format = RENDER_TARGET_BUFFER_FOMRAT,
                         .ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED, .Scaling = DXGI_MODE_SCALING_UNSPECIFIED },
@@ -767,8 +768,8 @@ static auto CreateRenderTargetViews() -> bool
     const D3D12_RESOURCE_DESC msaaRTResourceDesc{
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
         .Alignment = 0,
-        .Width = WINDOW_WIDTH,
-        .Height = WINDOW_HEIGHT,
+        .Width = s_render_width,
+        .Height = s_render_height,
         .DepthOrArraySize = 1,
         .MipLevels = 1,
         .Format = RENDER_TARGET_BUFFER_FOMRAT,
@@ -1229,20 +1230,20 @@ static auto PopulateCommandList() -> bool
     // Record commands to the command list
     // Set necessary state.
     const D3D12_VIEWPORT viewPort{
-        .TopLeftX = 0.0f,
-        .TopLeftY = 0.0f,
-        .Width = FLOAT(WINDOW_WIDTH),
-        .Height = FLOAT(WINDOW_HEIGHT),
+        .TopLeftX = FLOAT(s_render_width - VIEWPORT_WIDTH) * 0.5f,
+        .TopLeftY = FLOAT(s_render_height - VIEWPORT_HEIGHT) * 0.5f,
+        .Width = FLOAT(VIEWPORT_WIDTH),
+        .Height = FLOAT(VIEWPORT_HEIGHT),
         .MinDepth = 0.0f,
         .MaxDepth = 3.0f
     };
     s_commandList->RSSetViewports(1, &viewPort);
 
     const D3D12_RECT scissorRect{
-        .left = 0,
-        .top = 0,
-        .right = WINDOW_WIDTH,
-        .bottom = WINDOW_HEIGHT
+        .left = LONG(s_render_width - VIEWPORT_WIDTH) / 2L,
+        .top = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L,
+        .right = LONG(s_render_width - VIEWPORT_WIDTH) / 2L + VIEWPORT_WIDTH,
+        .bottom = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L + VIEWPORT_HEIGHT
     };
     s_commandList->RSSetScissorRects(1, &scissorRect);
 
@@ -1633,8 +1634,12 @@ static auto CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         return 1;
 
     case WM_SIZE:
-        // Resize the application to the new window size, except when
-        // it was minimized.
+        // Resize the application to the new window size, except when it was minimized.
+        if (wParam != SIZE_MINIMIZED)
+        {
+            s_render_width = lParam & 0xffff;
+            s_render_height = (lParam & 0xffff0000U) >> 16;
+        }
         break;
 
     case WM_KEYDOWN:
@@ -1841,7 +1846,7 @@ auto main(int argc, const char* argv[]) -> int
     HINSTANCE wndInstance = GetModuleHandleA(NULL);
 
     // window handle
-    HWND wndHandle = CreateAndInitializeWindow(wndInstance, s_appName, WINDOW_WIDTH, WINDOW_HEIGHT);
+    HWND wndHandle = CreateAndInitializeWindow(wndInstance, s_appName, WINDOW_WIDTH + 16, WINDOW_HEIGHT + 39);
 
     bool needRender = true;
     do
