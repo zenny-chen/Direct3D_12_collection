@@ -204,8 +204,8 @@ static auto TransWStrToString(char dstBuf[], const WCHAR srcBuf[]) -> void
 {
     if (dstBuf == nullptr || srcBuf == nullptr) return;
 
-    const int len = WideCharToMultiByte(CP_UTF8, 0, srcBuf, -1, NULL, 0, NULL, NULL);
-    WideCharToMultiByte(CP_UTF8, 0, srcBuf, -1, dstBuf, len, NULL, NULL);
+    const int len = WideCharToMultiByte(CP_UTF8, 0, srcBuf, -1, nullptr, 0, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, srcBuf, -1, dstBuf, len, nullptr, nullptr);
     dstBuf[len] = '\0';
 }
 
@@ -821,7 +821,7 @@ static auto CreateRenderTargetViews() -> bool
             return false;
         }
 
-        s_device->CreateRenderTargetView(s_renderTargets[i], NULL, rtvHandle);
+        s_device->CreateRenderTargetView(s_renderTargets[i], nullptr, rtvHandle);
 #endif
 
         rtvHandle.ptr += s_rtvDescriptorSize;
@@ -840,7 +840,7 @@ static auto CreateFenceAndEvent() -> bool
     }
 
     // Create an event handle to use for frame synchronization.
-    s_hFenceEvent = CreateEventA(NULL, FALSE, FALSE, NULL);
+    s_hFenceEvent = CreateEventA(nullptr, FALSE, FALSE, nullptr);
     if (s_hFenceEvent == nullptr)
     {
         hRes = HRESULT_FROM_WIN32(GetLastError());
@@ -1747,12 +1747,12 @@ static HWND CreateAndInitializeWindow(HINSTANCE hInstance, LPCSTR appName, int w
     win_class.cbClsExtra = 0;
     win_class.cbWndExtra = 0;
     win_class.hInstance = hInstance;
-    win_class.hIcon = LoadIconA(NULL, IDI_APPLICATION);
-    win_class.hCursor = LoadCursorA(NULL, IDC_ARROW);
+    win_class.hIcon = LoadIconA(nullptr, IDI_APPLICATION);
+    win_class.hCursor = LoadCursorA(nullptr, IDC_ARROW);
     win_class.hbrBackground = (HBRUSH)GetStockObject(WHITE_BRUSH);
-    win_class.lpszMenuName = NULL;
+    win_class.lpszMenuName = nullptr;
     win_class.lpszClassName = appName;
-    win_class.hIconSm = LoadIconA(NULL, IDI_WINLOGO);
+    win_class.hIconSm = LoadIconA(nullptr, IDI_WINLOGO);
     // Register window class:
     if (!RegisterClassExA(&win_class))
     {
@@ -1775,12 +1775,12 @@ static HWND CreateAndInitializeWindow(HINSTANCE hInstance, LPCSTR appName, int w
         CW_USEDEFAULT, CW_USEDEFAULT,     // x, y coords
         windowWidth,                    // width
         windowHeight,                  // height
-        NULL,                        // handle to parent
-        NULL,                            // handle to menu
+        nullptr,                        // handle to parent
+        nullptr,                            // handle to menu
         hInstance,                            // hInstance
-        NULL);
+        nullptr);
 
-    if (hWnd == NULL) {
+    if (hWnd == nullptr) {
         // It didn't work, so try to give a useful error:
         puts("Cannot create a window in which to draw!");
     }
@@ -1843,7 +1843,7 @@ auto main(int argc, const char* argv[]) -> int
     bool done = false;
 
     // Windows Instance
-    HINSTANCE wndInstance = GetModuleHandleA(NULL);
+    HINSTANCE wndInstance = GetModuleHandleA(nullptr);
 
     // window handle
     HWND wndHandle = CreateAndInitializeWindow(wndInstance, s_appName, WINDOW_WIDTH + 16, WINDOW_HEIGHT + 39);
@@ -2124,7 +2124,7 @@ auto main(int argc, const char* argv[]) -> int
     done = false;
     while (!done)
     {
-        PeekMessageA(&msg, NULL, 0, 0, PM_REMOVE);
+        PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE);
         // check for a quit message
         if (msg.message == WM_QUIT) {
             done = true;  // if found, quit app
@@ -2135,13 +2135,13 @@ auto main(int argc, const char* argv[]) -> int
             TranslateMessage(&msg);
             DispatchMessageA(&msg);
         }
-        RedrawWindow(wndHandle, NULL, NULL, RDW_INTERNALPAINT);
+        RedrawWindow(wndHandle, nullptr, nullptr, RDW_INTERNALPAINT);
     }
 
-    if (wndHandle != NULL)
+    if (wndHandle != nullptr)
     {
         DestroyWindow(wndHandle);
-        wndHandle = NULL;
+        wndHandle = nullptr;
     }
 
     DestroyAllAssets();
