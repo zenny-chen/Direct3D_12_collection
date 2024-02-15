@@ -68,7 +68,7 @@ static auto CreateMeshShaderPipelineStateObject(ID3D12Device2* d3d_device, ID3D1
                                                     ID3D12CommandAllocator* commandAllocator, ID3D12CommandAllocator* commandBundleAllocator) ->
             std::tuple<ID3D12PipelineState*, ID3D12GraphicsCommandList*, ID3D12GraphicsCommandList*>
 {
-    const D3D12_SHADER_BYTECODE meshShaderObj = CreateCompiledShaderObjectFromPath("shaders/simple_ms.mesh.cso");
+    const D3D12_SHADER_BYTECODE meshShaderObj = CreateCompiledShaderObjectFromPath("cso/simple_ms.mesh.cso");
 
     ID3D12PipelineState* pipelineState = nullptr;
     ID3D12GraphicsCommandList* commandList = nullptr;

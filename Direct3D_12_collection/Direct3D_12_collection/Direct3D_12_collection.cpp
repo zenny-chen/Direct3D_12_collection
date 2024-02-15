@@ -936,8 +936,8 @@ static auto CreateBasicRootSignature() -> bool
 
 static auto CreateBasicPipelineStateObject() -> bool
 {
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/basic.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/basic.frag.cso");
 
     bool done = false;
     do

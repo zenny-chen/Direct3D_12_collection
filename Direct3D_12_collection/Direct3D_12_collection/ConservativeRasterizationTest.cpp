@@ -368,8 +368,8 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundleList, cbv_uavDescriptorHeap);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/cr.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/cr.frag.cso");
 
     do
     {
@@ -506,8 +506,8 @@ static auto CreatePipelineStateObjectForLinesRenderTexture(ID3D12Device* d3d_dev
 {
     ID3D12PipelineState* pipelineState = nullptr;
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/cr.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/basic.frag.cso");
 
     do
     {
@@ -620,8 +620,8 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
     ID3D12GraphicsCommandList* commandBundleList = nullptr;
     ID3D12DescriptorHeap* descriptorHeap = nullptr;
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr_present.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr_present.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/cr_present.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/cr_present.frag.cso");
 
     do
     {
@@ -1619,7 +1619,7 @@ static auto CreatePipelineStateObjectForCompute(ID3D12Device* d3d_device, ID3D12
     ID3D12GraphicsCommandList* commandList = nullptr;
     ID3D12GraphicsCommandList* commandBundle = nullptr;
 
-    D3D12_SHADER_BYTECODE computeShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr.comp.cso");
+    D3D12_SHADER_BYTECODE computeShaderObj = CreateCompiledShaderObjectFromPath("cso/cr.comp.cso");
 
     do
     {

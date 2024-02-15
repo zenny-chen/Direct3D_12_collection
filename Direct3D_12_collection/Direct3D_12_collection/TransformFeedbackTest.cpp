@@ -102,8 +102,8 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundleList, descriptorHeap);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/tfb_basic.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/tfb_basic.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/basic.frag.cso");
 
     do
     {

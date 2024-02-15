@@ -60,8 +60,8 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundleList);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/ps_write_primID.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/ps_write_primID.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/ps_write_primID.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/ps_write_primID.frag.cso");
 
     do
     {

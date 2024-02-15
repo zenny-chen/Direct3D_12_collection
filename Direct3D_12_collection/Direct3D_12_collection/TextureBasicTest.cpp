@@ -117,8 +117,8 @@ static auto CreatePipelineStateObject(ID3D12Device* d3d_device, ID3D12CommandAll
     ID3D12GraphicsCommandList* commandList = nullptr;
     ID3D12GraphicsCommandList* commandBundleList = nullptr;
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic_texture.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic_texture.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/basic_texture.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/basic_texture.frag.cso");
 
     do
     {

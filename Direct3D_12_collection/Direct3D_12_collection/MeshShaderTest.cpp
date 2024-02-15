@@ -77,14 +77,14 @@ static auto CreateMeshShaderBasicPipelineStateObject(MeshShaderExecMode execMode
     switch (execMode)
     {
     case MeshShaderExecMode::BASIC_MODE:
-        amplificationShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.amplification.cso");
-        meshShaderObj = meshShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.mesh.cso");
-        pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+        amplificationShaderObj = CreateCompiledShaderObjectFromPath("cso/ms.amplification.cso");
+        meshShaderObj = meshShaderObj = CreateCompiledShaderObjectFromPath("cso/ms.mesh.cso");
+        pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/basic.frag.cso");
         break;
 
     case MeshShaderExecMode::ONLY_MESH_SHADER_MODE:
-        meshShaderObj = meshShaderObj = CreateCompiledShaderObjectFromPath("shaders/msonly.mesh.cso");
-        pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+        meshShaderObj = meshShaderObj = CreateCompiledShaderObjectFromPath("cso/msonly.mesh.cso");
+        pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/basic.frag.cso");
         break;
     }
 

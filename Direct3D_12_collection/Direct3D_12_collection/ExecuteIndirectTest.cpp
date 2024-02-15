@@ -136,7 +136,7 @@ static auto CreatePipelineStateObjectForArgBufferCompute(ID3D12Device* d3d_devic
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundle, descriptorHeap);
 
-    D3D12_SHADER_BYTECODE computeShaderObj = CreateCompiledShaderObjectFromPath("shaders/exec_indirect.comp.cso");
+    D3D12_SHADER_BYTECODE computeShaderObj = CreateCompiledShaderObjectFromPath("cso/exec_indirect.comp.cso");
 
     do
     {
@@ -204,8 +204,8 @@ static auto CreatePipelineStateObjectDraw(ID3D12Device* d3d_device, ID3D12Comman
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundle);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/exec_indirect_draw.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/exec_indirect.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/exec_indirect_draw.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/exec_indirect.frag.cso");
 
     do
     {
@@ -332,8 +332,8 @@ static auto CreatePipelineStateObjectDrawIndexed(ID3D12Device* d3d_device, ID3D1
 
     auto result = std::make_pair(pipelineState, commandBundle);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/exec_indirect_draw.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/exec_indirect.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/exec_indirect_draw.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/exec_indirect.frag.cso");
 
     do
     {
@@ -449,9 +449,9 @@ static auto CreatePipelineStateObjectForMeshShader(ID3D12Device2* d3d_device, ID
                                                 ID3D12CommandAllocator* commandBundleAllocator) ->
                                                 std::pair<ID3D12PipelineState*, ID3D12GraphicsCommandList*>
 {
-    D3D12_SHADER_BYTECODE amplificationShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.amplification.cso");
-    D3D12_SHADER_BYTECODE meshShaderObj = CreateCompiledShaderObjectFromPath("shaders/ms.mesh.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/basic.frag.cso");
+    D3D12_SHADER_BYTECODE amplificationShaderObj = CreateCompiledShaderObjectFromPath("cso/ms.amplification.cso");
+    D3D12_SHADER_BYTECODE meshShaderObj = CreateCompiledShaderObjectFromPath("cso/ms.mesh.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/basic.frag.cso");
 
     ID3D12PipelineState* pipelineState = nullptr;
     ID3D12GraphicsCommandList* commandBundle = nullptr;

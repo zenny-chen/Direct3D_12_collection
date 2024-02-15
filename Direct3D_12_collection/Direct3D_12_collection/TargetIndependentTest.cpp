@@ -258,8 +258,8 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
 
     auto result = std::make_tuple(pipelineState, commandList, commandBundleList, cbv_uavDescriptorHeap);
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/tir.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/tir.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/tir.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/tir.frag.cso");
 
     do
     {
@@ -398,8 +398,8 @@ static auto CreatePipelineStateObjectForPresentation(ID3D12Device* d3d_device, I
     ID3D12GraphicsCommandList* commandBundleList = nullptr;
     ID3D12DescriptorHeap* descriptorHeap = nullptr;
 
-    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr_present.vert.cso");
-    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("shaders/cr_present.frag.cso");
+    D3D12_SHADER_BYTECODE vertexShaderObj = CreateCompiledShaderObjectFromPath("cso/cr_present.vert.cso");
+    D3D12_SHADER_BYTECODE pixelShaderObj = CreateCompiledShaderObjectFromPath("cso/cr_present.frag.cso");
 
     do
     {
