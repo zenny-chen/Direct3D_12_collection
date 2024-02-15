@@ -65,6 +65,7 @@ static POINT s_wndMinsize{ };       // minimum window size
 static const char s_appName[] = "Direct3D 12 Collections";
 static float s_rotateAngle = 0.0f;
 static UINT s_render_width = 0U, s_render_height = 0U;
+static bool s_useMultiViewports = false;
 
 auto WriteToDeviceResourceAndSync(
     _In_ ID3D12GraphicsCommandList* pCmdList,
@@ -1229,23 +1230,104 @@ static auto PopulateCommandList() -> bool
 {
     // Record commands to the command list
     // Set necessary state.
-    const D3D12_VIEWPORT viewPort{
-        .TopLeftX = FLOAT(s_render_width - VIEWPORT_WIDTH) * 0.5f,
-        .TopLeftY = FLOAT(s_render_height - VIEWPORT_HEIGHT) * 0.5f,
-        .Width = FLOAT(VIEWPORT_WIDTH),
-        .Height = FLOAT(VIEWPORT_HEIGHT),
-        .MinDepth = 0.0f,
-        .MaxDepth = 3.0f
-    };
-    s_commandList->RSSetViewports(1, &viewPort);
 
-    const D3D12_RECT scissorRect{
-        .left = LONG(s_render_width - VIEWPORT_WIDTH) / 2L,
-        .top = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L,
-        .right = LONG(s_render_width - VIEWPORT_WIDTH) / 2L + LONG(VIEWPORT_WIDTH),
-        .bottom = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L + LONG(VIEWPORT_HEIGHT)
-    };
-    s_commandList->RSSetScissorRects(1, &scissorRect);
+    if (s_useMultiViewports)
+    {
+        constexpr float halfViewportWidth = VIEWPORT_WIDTH * 0.5f;
+        constexpr float quarterViewportWidth = VIEWPORT_WIDTH * 0.25f;
+
+        const D3D12_VIEWPORT viewPorts[] {
+            // top-left
+            {
+                .TopLeftX = 0.0f,
+                .TopLeftY = 0.0f,
+                .Width = halfViewportWidth,
+                .Height = halfViewportWidth,
+                .MinDepth = 0.0f,
+                .MaxDepth = 1.0f
+            },
+            // top right
+            {
+                .TopLeftX = VIEWPORT_WIDTH - quarterViewportWidth,
+                .TopLeftY = 0.0f,
+                .Width = quarterViewportWidth,
+                .Height = quarterViewportWidth,
+                .MinDepth = 0.0f,
+                .MaxDepth = 1.0f
+            },
+            // bottom left
+            {
+                .TopLeftX = 0.0f,
+                .TopLeftY = VIEWPORT_HEIGHT - quarterViewportWidth,
+                .Width = quarterViewportWidth,
+                .Height = quarterViewportWidth,
+                .MinDepth = 0.0f,
+                .MaxDepth = 1.0f
+            },
+            // bottom-right
+            {
+                .TopLeftX = halfViewportWidth,
+                .TopLeftY = VIEWPORT_HEIGHT * 0.5f,
+                .Width = halfViewportWidth,
+                .Height = halfViewportWidth,
+                .MinDepth = 0.0f,
+                .MaxDepth = 1.0f
+            }
+        };
+        s_commandList->RSSetViewports((UINT)std::size(viewPorts), viewPorts);
+
+        const D3D12_RECT scissorRects[] {
+            // top-left
+            {
+                .left = 0L,
+                .top = 0L,
+                .right = LONG(s_render_width),
+                .bottom = LONG(s_render_height)
+            },
+            // top right
+            {
+                .left = 0L,
+                .top = 0L,
+                .right = LONG(s_render_width),
+                .bottom = LONG(s_render_height)
+            },
+            // bottom left
+            {
+                .left = 0L,
+                .top = 0L,
+                .right = LONG(s_render_width),
+                .bottom = LONG(s_render_height)
+            },
+            // bottom-right
+            {
+                .left = 0L,
+                .top = 0L,
+                .right = LONG(s_render_width),
+                .bottom = LONG(s_render_height)
+            }
+        };
+        s_commandList->RSSetScissorRects((UINT)std::size(scissorRects), scissorRects);
+    }
+    else
+    {
+        const D3D12_VIEWPORT viewPort{
+            .TopLeftX = FLOAT(s_render_width - VIEWPORT_WIDTH) * 0.5f,
+            .TopLeftY = FLOAT(s_render_height - VIEWPORT_HEIGHT) * 0.5f,
+            .Width = FLOAT(VIEWPORT_WIDTH),
+            .Height = FLOAT(VIEWPORT_HEIGHT),
+            .MinDepth = 0.0f,
+            .MaxDepth = 3.0f
+        };
+        s_commandList->RSSetViewports(1, &viewPort);
+
+        const D3D12_RECT scissorRect{
+            .left = LONG(s_render_width - VIEWPORT_WIDTH) / 2L,
+            .top = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L,
+            .right = LONG(s_render_width - VIEWPORT_WIDTH) / 2L + LONG(VIEWPORT_WIDTH),
+            .bottom = LONG(s_render_height - VIEWPORT_HEIGHT) / 2L + LONG(VIEWPORT_HEIGHT)
+        };
+        s_commandList->RSSetScissorRects(1, &scissorRect);
+    }
 
     // Indicate that the back buffer will be used as a render target.
     const D3D12_RESOURCE_BARRIER renderBarrier = {
@@ -1817,16 +1899,17 @@ auto main(int argc, const char* argv[]) -> int
     puts("[7]: Pixel Shader Write Primitive ID");
     puts("[8]: Depth Bound Test");
     puts("[9]: Target Independent Rasterization Test");
+    puts("[10]: Geometry Shader Test");
 
-    constexpr long optionalItemsBegin = 10L;
+    constexpr long optionalItemsBegin = 11L;
     constexpr long optionalItemCount = 3L;
     constexpr long totalItemCount = optionalItemsBegin + optionalItemCount;
     
     if (s_supportMeshShader)
     {
-        puts("[10]: Basic Mesh Shader Rendering");
-        puts("[11]: Only Mesh Shader Rendering");
-        puts("[12]: Mesh Shader Without Rasterization Rendering");
+        puts("[11]: Basic Mesh Shader Rendering");
+        puts("[12]: Only Mesh Shader Rendering");
+        puts("[13]: Mesh Shader Without Rasterization Rendering");
     }
 
     char cmdBuf[256]{ };
@@ -2056,6 +2139,22 @@ auto main(int argc, const char* argv[]) -> int
             if (!std::get<9>(externalAssets)) break;
 
             s_needSetDescriptorHeapInDirectCommandList = true;
+        }
+        else if (selectedRenderModeIndex == 10)
+        {
+            // Geometry Shader Test
+            auto externalAssets = CreateGeometryShaderTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+
+            s_rootSignature = std::get<0>(externalAssets);
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            s_commandList = std::get<2>(externalAssets);
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            s_devHostBuffer = std::get<4>(externalAssets);
+            s_vertexBuffer = std::get<5>(externalAssets);
+
+            if (!std::get<6>(externalAssets)) break;
+
+            s_useMultiViewports = true;
         }
         else if(selectedRenderModeIndex < totalItemCount - 1)
         {
