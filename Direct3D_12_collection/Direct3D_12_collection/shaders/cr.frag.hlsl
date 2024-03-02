@@ -8,7 +8,9 @@ struct PSInput
     //sample float4 color : COLOR;
 };
 
-RWBuffer<uint> uavOutput : register(u0, space0);
+//RWBuffer<uint> uavOutput : register(u0, space0);
+// Intel HD Graphics and Iris Pro Graphics DO NOT support RWBuffer.
+RWStructuredBuffer<uint> uavOutput : register(u0, space0);
 
 [earlydepthstencil]
 float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outputCoverage : SV_Coverage, //out float outDepth : SV_Depth,

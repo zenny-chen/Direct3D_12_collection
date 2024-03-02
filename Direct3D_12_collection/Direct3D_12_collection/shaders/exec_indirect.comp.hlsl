@@ -12,7 +12,10 @@ struct IndirectArgumentBufferType
 };
 
 RWStructuredBuffer<IndirectArgumentBufferType> uavIndirectArgBuffer : register(u0, space0);
-RWBuffer<uint> uavCountBuffer : register(u1, space0);
+
+//RWBuffer<uint> uavCountBuffer : register(u1, space0);
+// Intel HD Graphics and Iris Pro Graphics DO NOT support RWBuffer.
+RWStructuredBuffer<uint> uavCountBuffer : register(u1, space0);
 
 [numthreads(128, 1, 1)]
 void CSMain(in uint3 threaID : SV_DispatchThreadID)

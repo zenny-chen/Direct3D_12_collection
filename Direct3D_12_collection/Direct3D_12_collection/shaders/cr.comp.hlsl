@@ -6,7 +6,9 @@ Texture2DMS<float> depthTextureMS : register(t0, space0);
 Texture2D<float> depthTexture : register(t0, space0);
 #endif
 
-RWBuffer<float> uavOutput : register(u0, space0);
+//RWBuffer<float> uavOutput : register(u0, space0);
+// Intel HD Graphics and Iris Pro Graphics DO NOT support RWBuffer.
+RWStructuredBuffer<float> uavOutput : register(u0, space0);
 
 struct CBSampleIndex
 {
