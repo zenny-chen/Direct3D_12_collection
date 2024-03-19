@@ -13,11 +13,14 @@ struct PSInput
 RWStructuredBuffer<uint> uavOutput : register(u0, space0);
 
 [earlydepthstencil]
-float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outputCoverage : SV_Coverage, //out float outDepth : SV_Depth,
+float4 PSMain(PSInput input, //out float outDepth : SV_Depth,
     uint shadingRate : SV_ShadingRate
 #if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
     // The `linear` interpolation will not apply!
     , linear uint innerCoverage : SV_InnerCoverage
+#else
+    , in uint inputCoverage : SV_Coverage
+    , out uint outputCoverage : SV_Coverage
 #endif
 #if ENABLE_SAMPLE_INTERPOLATION
     , uint sampleIndex : SV_SampleIndex
@@ -27,16 +30,8 @@ float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outpu
     float4 inputColor = input.color;
 
     InterlockedAdd(uavOutput[0], 1U);
-    //uavOutput[0] = inputCoverage;
 
-    outputCoverage = inputCoverage;
     //outDepth = 1.5f;
-
-#if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
-    if (innerCoverage == 0U) {
-        return float4(1.0f - inputColor.r, 1.0f - inputColor.g, 1.0f - inputColor.b, 1.0f);
-    }
-#endif
 
 #if ENABLE_SAMPLE_INTERPOLATION
     switch (sampleIndex)
@@ -74,18 +69,31 @@ float4 PSMain(PSInput input, in uint inputCoverage : SV_Coverage, out uint outpu
         {
         case D3D12_SHADING_RATE_1X1:
         default:
-            return float4(0.1f, 0.1f, 0.1, 1.0f);
+            inputColor = float4(0.1f, 0.1f, 0.1, 1.0f);
+            break;
 
         case D3D12_SHADING_RATE_1X2:
-            return float4(0.9f, 0.1f, 0.1, 1.0f);
+            inputColor = float4(0.9f, 0.1f, 0.1, 1.0f);
+            break;
 
         case D3D12_SHADING_RATE_2X1:
-            return float4(0.1f, 0.9f, 0.1, 1.0f);
+            inputColor = float4(0.1f, 0.9f, 0.1, 1.0f);
+            break;
 
         case D3D12_SHADING_RATE_2X2:
-            return float4(0.9f, 0.9f, 0.9, 1.0f);
+            inputColor = float4(0.9f, 0.9f, 0.9, 1.0f);
+            break;
         }
     }
+
+#if ENABLE_CONSERVATIVE_RASTERIZATION_MODE
+    if (innerCoverage != 0U) {
+        inputColor = float4(0.9f, 0.9f, 0.9f, 1.0f);
+    }
+#else
+    //uavOutput[0] = inputCoverage;
+    outputCoverage = inputCoverage;
+#endif
 
     if (int(input.position.x) == 32 - 8 && int(input.position.y) == 31 - 7) {
         //uavOutput[0] = uint(EvaluateAttributeSnapped(input.color.r, int2(-8, -8)) * 100.0f);
