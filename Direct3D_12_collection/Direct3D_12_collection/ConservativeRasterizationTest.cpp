@@ -418,7 +418,7 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
                 .DepthClipEnable = TRUE,
                 .MultisampleEnable = TEXTURE_SAMPLE_COUNT > 1U,
                 .AntialiasedLineEnable = FALSE,
-                .ForcedSampleCount = 0,
+                .ForcedSampleCount = 0U,
                 .ConservativeRaster = USE_CONSERVATIVE_RASTERIZATION_MODE
             },
             .DepthStencilState {
@@ -426,8 +426,8 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
                 .DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL,
                 .DepthFunc = D3D12_COMPARISON_FUNC_LESS,        // D3D12_COMPARISON_FUNC_NEVER
                 .StencilEnable = FALSE,
-                .StencilReadMask = 0,
-                .StencilWriteMask = 0,
+                .StencilReadMask = 0U,
+                .StencilWriteMask = 0U,
                 .FrontFace { },
                 .BackFace { }
             },
@@ -437,17 +437,17 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
             },
             .IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
             .PrimitiveTopologyType = RENDER_TEXTURE_USE_PRIMITIVE_TOPOLOGY_TYPE,
-            .NumRenderTargets = 1,
+            .NumRenderTargets = 1U,
             .RTVFormats {
                 // RTVFormats[0]
                 { RENDER_TARGET_BUFFER_FOMRAT }
             },
-            .DSVFormat = DXGI_FORMAT_D32_FLOAT,
+            .DSVFormat = TEST_EARLY_DEPTH_CULLING != 0 ? DXGI_FORMAT_D32_FLOAT : DXGI_FORMAT_UNKNOWN,
             .SampleDesc {
                 .Count = TEXTURE_SAMPLE_COUNT,
-                .Quality = 0
+                .Quality = 0U
             },
-            .NodeMask = 0,
+            .NodeMask = 0U,
             .CachedPSO { },
             .Flags = D3D12_PIPELINE_STATE_FLAG_NONE
         };
