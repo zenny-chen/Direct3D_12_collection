@@ -1501,6 +1501,7 @@ static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12
 
     SyncAndReadFromDeviceResource(commandList, uavBufferSize, readbackDevHostBuffer, uavBuffer);
 
+    // Resolve the Query Data
     commandList->ResolveQueryData(queryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0U, 1U, readbackDevHostBuffer, 8U);
 
     // End of the record
