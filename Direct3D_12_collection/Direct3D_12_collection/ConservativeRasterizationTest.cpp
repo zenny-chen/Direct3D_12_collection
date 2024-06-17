@@ -1502,7 +1502,7 @@ static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12
     SyncAndReadFromDeviceResource(commandList, uavBufferSize, readbackDevHostBuffer, uavBuffer);
 
     // Resolve the Query Data
-    commandList->ResolveQueryData(queryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0U, 1U, readbackDevHostBuffer, 8U);
+    commandList->ResolveQueryData(queryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0U, 1U, readbackDevHostBuffer, 8U * 4U);
 
     // End of the record
     HRESULT hRes = commandList->Close();
@@ -1855,8 +1855,10 @@ auto CreateConservativeRasterizationTestAssets(ID3D12Device* d3d_device, ID3D12C
             break;
         }
 
+        unsigned long long* queryPtr = (unsigned long long*)hostMemPtr;
+
         printf("Current pixel shader invocation count: %u\n", hostMemPtr[0]);
-        printf("Current Occlusion Query result: %u\n", hostMemPtr[2]);
+        printf("Current Occlusion Query result: %llu\n", queryPtr[4]);
 
         readbackDevHostBuffer->Unmap(0, nullptr);
 

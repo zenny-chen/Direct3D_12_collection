@@ -5,6 +5,7 @@ static constexpr UINT TEXTURE_SIZE = WINDOW_WIDTH / 8U;
 static constexpr UINT TEXTURE_SAMPLE_COUNT = 1U;
 static constexpr bool MSAA_RENDER_TARGET_NEED_RESOLVE = true && TEXTURE_SAMPLE_COUNT > 1U;
 static constexpr UINT FORCE_SAMPLE_COUNT = 4U;
+static constexpr UINT GRAPHICS_PIPELINE_SAMPLE_MASK = UINT32_MAX * 1U;
 static constexpr UINT uavBufferSize = 64U;
 
 enum CBV_SRV_UAV_SLOT_ID
@@ -296,7 +297,7 @@ static auto CreatePipelineStateObjectForRenderTexture(ID3D12Device* d3d_device, 
                     }
                 }
             },
-            .SampleMask = UINT32_MAX,
+            .SampleMask = GRAPHICS_PIPELINE_SAMPLE_MASK,
             // Use the default rasterizer state
             .RasterizerState {
                 .FillMode = D3D12_FILL_MODE_SOLID,
@@ -907,8 +908,8 @@ static auto CreateVertexBufferForPresentation(ID3D12Device* d3d_device, ID3D12Ro
 }
 
 static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12GraphicsCommandList* commandList,
-                                ID3D12DescriptorHeap* rtvDescriptorHeap, ID3D12DescriptorHeap* cbv_uavDescriptorHeap, ID3D12Resource* renderTarget,
-                                ID3D12Resource* resolvedRTTexture, ID3D12Resource* uavBuffer, ID3D12Resource* readbackDevHostBuffer) -> bool
+                                ID3D12DescriptorHeap* rtvDescriptorHeap, ID3D12DescriptorHeap* cbv_uavDescriptorHeap, ID3D12QueryHeap* queryHeap,
+                                ID3D12Resource* renderTarget, ID3D12Resource* resolvedRTTexture, ID3D12Resource* uavBuffer, ID3D12Resource* readbackDevHostBuffer) -> bool
 {
     // Record commands to the command list
     // Set necessary state.
@@ -958,8 +959,14 @@ static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12
     ID3D12DescriptorHeap* const descHeaps[]{ cbv_uavDescriptorHeap };
     commandList->SetDescriptorHeaps(UINT(std::size(descHeaps)), descHeaps);
 
+    // Insert the begin query
+    commandList->BeginQuery(queryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0U);
+
     // Execute the bundle to the command list
     commandList->ExecuteBundle(commandBundle);
+
+    // Insert the end query
+    commandList->EndQuery(queryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0U);
 
     // Make the render target as shader resource view, or resolve the render target to the destniation resolved texture
     if (MSAA_RENDER_TARGET_NEED_RESOLVE)
@@ -1028,6 +1035,9 @@ static auto PopulateCommandList(ID3D12GraphicsCommandList* commandBundle, ID3D12
 
     SyncAndReadFromDeviceResource(commandList, uavBufferSize, readbackDevHostBuffer, uavBuffer);
 
+    // Resolve the Query Data
+    commandList->ResolveQueryData(queryHeap, D3D12_QUERY_TYPE_OCCLUSION, 0U, 1U, readbackDevHostBuffer, 8U * 4U);
+
     // End of the record
     HRESULT hRes = commandList->Close();
     if (FAILED(hRes))
@@ -1066,6 +1076,20 @@ auto CreateTargetIndependentTestAssets(ID3D12Device* d3d_device, ID3D12CommandQu
     rootSignature = CreateRootSignature(d3d_device);
     if (rootSignature == nullptr) return result;
 
+    ID3D12QueryHeap* queryHeap = nullptr;
+    // Create the query heap for occlusion query
+    const D3D12_QUERY_HEAP_DESC queryHeapDesc{
+        .Type = D3D12_QUERY_HEAP_TYPE_OCCLUSION,
+        .Count = 1U,
+        .NodeMask = 0U
+    };
+    const HRESULT hRes = d3d_device->CreateQueryHeap(&queryHeapDesc, IID_ID3D12QueryHeap, (void**)&queryHeap);
+    if (FAILED(hRes))
+    {
+        fprintf(stderr, "Failed CreateQueryHeap: %ld\n", hRes);
+        return result;
+    }
+
     auto const rtTexRes = CreateRenderTargetViewForTexture(d3d_device);
     rtvDescriptorHeap = std::get<0>(rtTexRes);
     rtTexture = std::get<1>(rtTexRes);
@@ -1089,7 +1113,7 @@ auto CreateTargetIndependentTestAssets(ID3D12Device* d3d_device, ID3D12CommandQu
     {
         if (!ResetCommandAllocatorAndList(commandAllocator, commandList, pipelineState)) break;
 
-        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, cbv_uavDescriptorHeap,
+        if (!PopulateCommandList(commandBundle, commandList, rtvDescriptorHeap, cbv_uavDescriptorHeap, queryHeap,
                                 rtTexture, resolvedRTTexture, uavBuffer, readbackDevHostBuffer)) break;
 
         // Execute the command list.
@@ -1107,7 +1131,10 @@ auto CreateTargetIndependentTestAssets(ID3D12Device* d3d_device, ID3D12CommandQu
             break;
         }
 
-        printf("Current pixel shader invocation count: %u\n", *hostMemPtr);
+        unsigned long long* queryPtr = (unsigned long long*)hostMemPtr;
+
+        printf("Current pixel shader invocation count: %u\n", hostMemPtr[0]);
+        printf("Occlusion Query value: %llu\n", queryPtr[4]);
 
         readbackDevHostBuffer->Unmap(0, nullptr);
 
@@ -1121,6 +1148,8 @@ auto CreateTargetIndependentTestAssets(ID3D12Device* d3d_device, ID3D12CommandQu
 
     pipelineState->Release();
     pipelineState = nullptr;
+
+    queryHeap->Release();
 
     uavBuffer->Release();
     uavCompOutBuffer->Release();
