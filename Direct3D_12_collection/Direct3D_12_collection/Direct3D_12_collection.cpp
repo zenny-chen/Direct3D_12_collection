@@ -1900,16 +1900,17 @@ auto main(int argc, const char* argv[]) -> int
     puts("[8]: Depth Bound Test");
     puts("[9]: Target Independent Rasterization Test");
     puts("[10]: Geometry Shader Test");
+    puts("[11]: General Rasterization Test");
 
-    constexpr long optionalItemsBegin = 11L;
+    constexpr long optionalItemsBegin = 12L;
     constexpr long optionalItemCount = 3L;
     constexpr long totalItemCount = optionalItemsBegin + optionalItemCount;
     
     if (s_supportMeshShader)
     {
-        puts("[11]: Basic Mesh Shader Rendering");
-        puts("[12]: Only Mesh Shader Rendering");
-        puts("[13]: Mesh Shader Without Rasterization Rendering");
+        puts("[12]: Basic Mesh Shader Rendering");
+        puts("[13]: Only Mesh Shader Rendering");
+        puts("[14]: Mesh Shader Without Rasterization Rendering");
     }
 
     char cmdBuf[256]{ };
@@ -2155,6 +2156,24 @@ auto main(int argc, const char* argv[]) -> int
             if (!std::get<6>(externalAssets)) break;
 
             s_useMultiViewports = true;
+        }
+        else if (selectedRenderModeIndex == 11)
+        {
+            // General Rasterization
+            auto externalAssets = CreateGeneralRasterizationTestAssets(s_device, s_commandQueue, s_commandAllocator, s_commandBundleAllocator);
+            s_rootSignature = std::get<0>(externalAssets);
+            s_pipelineStates[0] = std::get<1>(externalAssets);
+            s_commandList = std::get<2>(externalAssets);
+            s_commandBundles[0] = std::get<3>(externalAssets);
+            s_rtvTextureDescriptorHeap = std::get<4>(externalAssets);
+            s_descriptorHeap = std::get<5>(externalAssets);
+            s_devHostBuffer = std::get<6>(externalAssets);
+            s_vertexBuffer = std::get<7>(externalAssets);
+            s_rtTexture = std::get<8>(externalAssets);
+
+            if (!std::get<9>(externalAssets)) break;
+
+            s_needSetDescriptorHeapInDirectCommandList = true;
         }
         else if(selectedRenderModeIndex < totalItemCount - 1)
         {
