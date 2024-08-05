@@ -663,6 +663,44 @@ static auto CreateVertexBufferForRenderTexture(ID3D12Device* d3d_device, ID3D12R
         {.position { HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.48f, 0.88f, 0.42f, 1.0f } },
         {.position { 1.0f * PER_PIXEL_WIDTH + (1.0f + 0.5f) * HALF_PIXEL_WIDTH, 1.0f * PER_PIXEL_WIDTH + 0.5f * HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.48f, 0.88f, 0.42f, 1.0f } },
         {.position { 1.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -0.5f * HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.48f, 0.88f, 0.42f, 1.0f } },
+
+        // 19th yellow triangle
+        {.position { -8.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.85f, 0.84f, 0.42f, 1.0f } },
+        {.position { -8.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.85f, 0.84f, 0.42f, 1.0f } },
+        {.position { -5.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.85f, 0.84f, 0.42f, 1.0f } },
+        // 20th red triangle
+        {.position { -8.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.97f, 0.4f, 0.42f, 1.0f } },
+        {.position { -5.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.97f, 0.4f, 0.42f, 1.0f } },
+        {.position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.97f, 0.4f, 0.42f, 1.0f } },
+        // 21st purple triangle
+        {.position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.47f, 0.4f, 1.0f, 1.0f } },
+        {.position { -5.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.47f, 0.4f, 1.0f, 1.0f } },
+        {.position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.47f, 0.4f, 1.0f, 1.0f } },
+        // 22nd pink triangle
+        {.position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.91f, 0.53f, 0.95f, 1.0f } },
+        {.position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.91f, 0.53f, 0.95f, 1.0f } },
+        {.position { HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.91f, 0.53f, 0.95f, 1.0f } },
+        // 23rd cyan triangle
+        { .position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.42f, 0.82f, 1.0f, 1.0f } },
+        { .position { HALF_PIXEL_WIDTH, -HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.42f, 0.82f, 1.0f, 1.0f } },
+        { .position { 1.0f * PER_PIXEL_WIDTH + 0.5f * HALF_PIXEL_WIDTH, -1.0f * PER_PIXEL_WIDTH + 0.5f * HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.42f, 0.82f, 1.0f, 1.0f } },
+        // 24th yellow triangle
+        { .position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.85f, 0.84f, 0.42f, 1.0f } },
+        { .position { 1.0f * PER_PIXEL_WIDTH + 0.5f * HALF_PIXEL_WIDTH, -1.0f * PER_PIXEL_WIDTH + 0.5f * HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.85f, 0.84f, 0.42f, 1.0f } },
+        { .position { 6.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.85f, 0.84f, 0.42f, 1.0f } },
+        // 25th red triangle
+        { .position { 6.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.97f, 0.4f, 0.42f, 1.0f } },
+        { .position { 1.0f * PER_PIXEL_WIDTH + 0.5f * HALF_PIXEL_WIDTH, -1.0f * PER_PIXEL_WIDTH + 0.5f * HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.97f, 0.4f, 0.42f, 1.0f } },
+        { .position { 7.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.97f, 0.4f, 0.42f, 1.0f } },
+        // 26th purple triangle
+        { .position { 6.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.47f, 0.4f, 1.0f, 1.0f } },
+        { .position { 7.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.47f, 0.4f, 1.0f, 1.0f } },
+        { .position { 7.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.47f, 0.4f, 1.0f, 1.0f } },
+
+        // 27th green triangle
+        { .position { -8.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.48f, 0.88f, 0.42f, 1.0f } },
+        { .position { -2.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, -3.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.48f, 0.88f, 0.42f, 1.0f } },
+        { .position { 6.0f * PER_PIXEL_WIDTH + HALF_PIXEL_WIDTH, -4.0f * PER_PIXEL_WIDTH - HALF_PIXEL_WIDTH, 0.0f, 1.0f }, .color { 0.48f, 0.88f, 0.42f, 1.0f } }
 #endif
     };
 
